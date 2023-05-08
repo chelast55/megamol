@@ -35,6 +35,7 @@ if(BUILD_FRONTEND_SERVICES)
     "remote_service/*.hpp"
     "profiling_service/*.hpp"
     "vr_service/*.hpp"
+    "powerlogging_service/*.hpp"
 #   "service_template/*.hpp"
     )
 
@@ -51,6 +52,7 @@ if(BUILD_FRONTEND_SERVICES)
     "remote_service/*.cpp"
     "profiling_service/*.cpp"
     "vr_service/*.cpp"
+    "powerlogging_service/*.cpp"
     # "service_template/*.cpp"
   )
 
@@ -112,6 +114,7 @@ if(BUILD_FRONTEND_SERVICES)
     "gui/3rd"
     "gui/src"
     "vr_service"
+    "powerlogging_service"
    # "service_template"
   )
 

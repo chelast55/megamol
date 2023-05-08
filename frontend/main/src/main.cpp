@@ -18,6 +18,7 @@
 #include "Lua_Service_Wrapper.hpp"
 #include "OpenGL_GLFW_Service.hpp"
 #include "PluginsResource.h"
+#include "PowerLogging_Service.hpp"
 #include "Profiling_Service.hpp"
 #include "ProjectLoader_Service.hpp"
 #include "Remote_Service.hpp"
@@ -171,6 +172,17 @@ int main(const int argc, const char** argv) {
     profiling_config.autostart_profiling = config.autostart_profiling;
     profiling_config.include_graph_events = config.include_graph_events;
 
+    megamol::frontend::PowerLogging_Service powerlogging_service;
+    megamol::frontend::PowerLogging_Service::Config powerlogging_config;
+    powerlogging_config.log_file = "powerlog.csv"; // TODO: Do NOT hard-code! LUA?
+    powerlogging_config.frames_per_flush = 10000;
+    powerlogging_config.frames_per_request = 50;
+    powerlogging_config.asynchronous_logging = false;
+    powerlogging_config.asynchronous_sampling = false;
+    powerlogging_config.sensors.adl = true;
+    powerlogging_config.sensors.nvml = true;
+    powerlogging_config.sensors.tinkerforge = true;
+
 #ifdef MM_CUDA_ENABLED
     megamol::frontend::CUDA_Service cuda_service;
     cuda_service.setPriority(24);
@@ -208,10 +220,12 @@ int main(const int argc, const char** argv) {
 
     services.add(profiling_service, &profiling_config);
 
+    // TODO: nest in macro That is only active when power logging is wanted
+    services.add(powerlogging_service, &powerlogging_config);
+
 #ifdef MM_CUDA_ENABLED
     services.add(cuda_service, nullptr);
 #endif
-
     megamol::frontend::Remote_Service remote_service;
     megamol::frontend::Remote_Service::Config remoteConfig;
     if (auto remote_session_role = handle_remote_session_config(config, remoteConfig); !remote_session_role.empty()) {
@@ -220,7 +234,6 @@ int main(const int argc, const char** argv) {
             lua_service_wrapper.getPriority() - 1); // remote does stuff before everything else, even before lua
         services.add(remote_service, &remoteConfig);
     }
-
     const bool init_ok = services.init(); // runs init(config_ptr) on all services with provided config sructs
 
     if (!init_ok) {
