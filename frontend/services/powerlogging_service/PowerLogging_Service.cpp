@@ -38,16 +38,17 @@ bool PowerLogging_Service::init(void* configPtr) {
 
 bool PowerLogging_Service::init(const Config& config) {
 #ifdef MEGAMOL_USE_POWER
+    powerlog_file_path = config.powerlog_file;
     frames_per_flush = config.frames_per_flush;
     asynchronous_logging = config.asynchronous_logging;
     asynchronous_sampling = config.asynchronous_sampling;
     sensors = config.sensors;
-    if (!config.log_file.empty()) {
-        if (!log_file.is_open()) {
-            log_file = std::ofstream(config.log_file);
+    if (!config.powerlog_file.empty()) {
+        if (!powerlog_file.is_open()) {
+            powerlog_file = std::ofstream(powerlog_file_path);
 
             // csv header
-            log_buffer << "Sensor Type" << ',' << "Sensor Name" << ',' << "Sample Timestamp (ms)" << ','
+            powerlog_buffer << "Sensor Type" << ',' << "Sensor Name" << ',' << "Sample Timestamp (ms)" << ','
                        << "Momentary Power Comsumption (W)" << std::endl;
         }
     }
@@ -55,30 +56,24 @@ bool PowerLogging_Service::init(const Config& config) {
 
     if (sensors.nvml) {
         try {
-            using nvml_sensor = visus::power_overwhelming::nvml_sensor;
             nvml_sensors.resize(nvml_sensor::for_all(nullptr, 0));
             nvml_sensor::for_all(nvml_sensors.data(), nvml_sensors.size());
-        }
-        catch (std::exception& ex) {
+        } catch (std::exception& ex) {
             log_warning("Exception while initializing ADL sensors");
             log_warning(ex.what());
         }
     }
     if (sensors.adl) {
         try {
-            using adl_sensor = visus::power_overwhelming::adl_sensor;
             adl_sensors.resize(adl_sensor::for_all(nullptr, 0));
             adl_sensor::for_all(adl_sensors.data(), adl_sensors.size());
-        }
-        catch (std::exception& ex) {
+        } catch (std::exception& ex) {
             log_warning("Exception while initializing NVML sensors");
             log_warning(ex.what());
         }
     }
     if (sensors.tinkerforge) {
         try {
-            using tinkerforge_sensor_definition = visus::power_overwhelming::tinkerforge_sensor_definiton; // typo in "definiton". This is fine ...for now
-            using tinkerforge_sensor = visus::power_overwhelming::tinkerforge_sensor;
             std::vector<tinkerforge_sensor_definition> tinkerforge_sensor_definitions;
             tinkerforge_sensor_definitions.resize(tinkerforge_sensor::get_definitions(nullptr, 0));
 
@@ -89,15 +84,19 @@ bool PowerLogging_Service::init(const Config& config) {
                 tinkerforge_sensor_definitions.resize(count);
             }
 
-            // definitions to sensors (Is this allowed? Is this a bad idea?)
             for (auto& tinkerforge_sensor_definition : tinkerforge_sensor_definitions) {
                 tinkerforge_sensors.push_back(tinkerforge_sensor(tinkerforge_sensor_definition));
             }
-        }
-        catch (std::exception& ex) {
+        } catch (std::exception& ex) {
             log_warning("Exception while initializing tinkerforge sensors");
             log_warning(ex.what());
         }
+    }
+    
+    if (asynchronous_sampling) {
+        bind_sensor(adl_sensors);
+        bind_sensor(nvml_sensors);
+        bind_sensor(tinkerforge_sensors);
     }
 
     log("initialized successfully");
@@ -107,11 +106,15 @@ bool PowerLogging_Service::init(const Config& config) {
 
 void PowerLogging_Service::close() {
 #ifdef MEGAMOL_USE_POWER
-    if (log_file.is_open()) {
+    if (powerlog_file.is_open()) {
         // flush rest of log
-        log_file << log_buffer.rdbuf();
-        log_file.close();
+        powerlog_file << powerlog_buffer.rdbuf();
+        powerlog_file.close();
     }
+
+    unbind_sensor(adl_sensors);
+    unbind_sensor(nvml_sensors);
+    unbind_sensor(tinkerforge_sensors);
 #endif
 }
 
@@ -144,34 +147,66 @@ void PowerLogging_Service::preGraphRender() {
 }
 
 void PowerLogging_Service::postGraphRender() {
+#ifdef MEGAMOL_USE_POWER
     frame_counter++;
 
-    if (frame_counter % frames_per_request == 0) {
-        sample_sensor("ADL", adl_sensors);
-        sample_sensor("NVML", nvml_sensors);
-        sample_sensor("Tinkerforge", tinkerforge_sensors);
+    if (!asynchronous_sampling) {
+        if (frame_counter % frames_per_request == 0) {
+            sample_sensor(adl_sensors);
+            sample_sensor(nvml_sensors);
+            sample_sensor(tinkerforge_sensors);
+        }
     }
 
     if (frame_counter % frames_per_flush == 0)
-        log_file << log_buffer.rdbuf();
+        powerlog_file << powerlog_buffer.rdbuf();
 }
+#endif
 
 template<typename T>
-void PowerLogging_Service::sample_sensor(const std::string& sensor_type, std::vector<T>& sensors)
+void PowerLogging_Service::sample_sensor(std::vector<T>& sensors)
 {
     for (auto& sensor : sensors) {
-        auto sample = sensor.sample();
-        log_buffer << sensor_type << ',' << sensor.name() << ',' << sample.timestamp() << ',' << sample.power()
-                   << std::endl;
+        sample_to_log(sensor.sample());
+    }
+}
+template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
+template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
+template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
+
+template<typename T>
+void PowerLogging_Service::bind_sensor(std::vector<T>& sensors) {
+    for (auto& sensor : sensors) {
+        sensor.sample([](const measurement& sample, void*) { PowerLogging_Service::sample_to_log(sample); }, this->request_timeout, this);
+    }
+}
+template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
+template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
+
+void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors) {
+    for (auto& sensor : sensors) {
+        sensor.sample([](const measurement& sample, void*) { PowerLogging_Service::sample_to_log(sample); },
+            tinkerforge_sensor_source::power, this->request_timeout, this);
     }
 }
 
-template void PowerLogging_Service::sample_sensor(
-    const std::string& sensor_type, std::vector<visus::power_overwhelming::adl_sensor>& sensors);
-template void PowerLogging_Service::sample_sensor(
-    const std::string& sensor_type, std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
-template void PowerLogging_Service::sample_sensor(
-    const std::string& sensor_type, std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
+template<typename T>
+void PowerLogging_Service::unbind_sensor(std::vector<T>& sensors) {
+    for (auto& sensor : sensors) {
+        sensor.sample(nullptr);
+    }
+}
+template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
+template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
+template void PowerLogging_Service::unbind_sensor(
+    std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
+
+void PowerLogging_Service::sample_to_log(const measurement& sample) {
+    powerlog_buffer << ""/*TODO: somehow get sensor type*/ << ',' << sample.sensor() << ',' << sample.timestamp()
+                    << ',' << sample.power() << std::endl;
+}
+
+std::stringstream PowerLogging_Service::powerlog_buffer;
 
 
 } // namespace megamol::frontend

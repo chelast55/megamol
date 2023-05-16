@@ -174,11 +174,12 @@ int main(const int argc, const char** argv) {
 
     megamol::frontend::PowerLogging_Service powerlogging_service;
     megamol::frontend::PowerLogging_Service::Config powerlogging_config;
-    powerlogging_config.log_file = "powerlog.csv"; // TODO: Do NOT hard-code! LUA?
+    powerlogging_config.powerlog_file = "powerlog.csv"; // TODO: Do NOT hard-code! LUA?
     powerlogging_config.frames_per_flush = 10000;
-    powerlogging_config.frames_per_request = 50;
+    powerlogging_config.frames_per_request = 1;
+    powerlogging_config.request_timeout = 5000;
     powerlogging_config.asynchronous_logging = false;
-    powerlogging_config.asynchronous_sampling = false;
+    powerlogging_config.asynchronous_sampling = true;
     powerlogging_config.sensors.adl = true;
     powerlogging_config.sensors.nvml = true;
     powerlogging_config.sensors.tinkerforge = true;
