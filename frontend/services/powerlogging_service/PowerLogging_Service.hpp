@@ -10,15 +10,15 @@
 #include <fstream>
 #include <sstream>
 #include <thread>
+#include <mutex>
+
+#include <power_overwhelming/adl_sensor.h>
+#include <power_overwhelming/nvml_sensor.h>
+#include <power_overwhelming/tinkerforge_sensor_definiton.h> // yes, it doesn't work without the typo in "definiton"
+#include <power_overwhelming/tinkerforge_sensor_source.h>
+#include <power_overwhelming/tinkerforge_display.h>
 
 #include "AbstractFrontendService.hpp"
-
-#include "power_overwhelming/power_overwhelming_api.h"
-#include "power_overwhelming/adl_sensor.h"
-#include "power_overwhelming/nvml_sensor.h"
-#include "power_overwhelming/tinkerforge_sensor_definiton.h" // yes, it doesn't work without the typo in "definiton"
-#include "power_overwhelming/tinkerforge_sensor_source.h"
-#include "power_overwhelming/tinkerforge_display.h"
 
 namespace megamol::frontend {
 
@@ -76,6 +76,24 @@ public:
 
 private:
 
+    struct compact_sample {
+        measurement::timestamp_type timestamp;
+        measurement::value_type value;
+
+        compact_sample(measurement::timestamp_type ts, measurement::value_type v) : timestamp(ts), value(v) {}
+    };
+
+    struct sampling_container {
+        std::string name;
+        std::mutex lock;
+        std::vector<compact_sample> sample_buffer;
+
+        sampling_container(const sampling_container& c) : name(c.name), lock(), sample_buffer(c.sample_buffer) {}
+        sampling_container(std::string n, size_t buffer_size) : name(n), lock(), sample_buffer() {
+            sample_buffer.reserve(buffer_size);
+        }
+    };
+
     // resources
     std::vector<FrontendResource> _providedResourceReferences;
     std::vector<std::string> _requestedResourcesNames;
@@ -101,6 +119,8 @@ private:
     uint64_t frame_counter = 0;
 
     // sampling
+    std::vector<sampling_container> sampling_containers;
+
     template<typename T>
     void sample_sensor(std::vector<T>& sensors);
     template<typename T>

@@ -175,7 +175,7 @@ int main(const int argc, const char** argv) {
     megamol::frontend::PowerLogging_Service powerlogging_service;
     megamol::frontend::PowerLogging_Service::Config powerlogging_config;
     powerlogging_config.powerlog_file = "powerlog.csv"; // TODO: Do NOT hard-code! LUA?
-    powerlogging_config.frames_per_flush = 10000;
+    powerlogging_config.frames_per_flush = 1000;
     powerlogging_config.frames_per_request = 1;
     powerlogging_config.request_timeout = 5000;
     powerlogging_config.asynchronous_logging = false;
