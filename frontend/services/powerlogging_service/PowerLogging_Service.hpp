@@ -11,6 +11,8 @@
 #include <sstream>
 #include <thread>
 #include <mutex>
+#include <array>
+#include <condition_variable>
 
 #include <power_overwhelming/adl_sensor.h>
 #include <power_overwhelming/nvml_sensor.h>
@@ -45,9 +47,10 @@ public:
         std::string powerlog_file;
         uint32_t frames_per_flush;
         uint32_t frames_per_request;
-        sensor::microseconds_type request_timeout;
         bool asynchronous_logging;
         bool asynchronous_sampling;
+        sensor::microseconds_type sample_timeout;
+        size_t sample_buffer_size;
         Sensors sensors;
     };
 
@@ -84,13 +87,40 @@ private:
     };
 
     struct sampling_container {
-        std::string name;
-        std::mutex lock;
-        std::vector<compact_sample> sample_buffer;
+        const std::string name;
+        const size_t buffer_size;
+        std::mutex storage_lock;
+        std::mutex logging_lock;
+        std::condition_variable_any signal;
+        std::ofstream powerlog_file;
+        bool time_to_die;
+        std::vector<compact_sample> storage_sample_buffer;
+        std::vector<compact_sample> logging_sample_buffer;
 
-        sampling_container(const sampling_container& c) : name(c.name), lock(), sample_buffer(c.sample_buffer) {}
-        sampling_container(std::string n, size_t buffer_size) : name(n), lock(), sample_buffer() {
-            sample_buffer.reserve(buffer_size);
+        sampling_container(const sampling_container& c)
+                : name(c.name)
+                , buffer_size(c.buffer_size)
+                , storage_lock()
+                , logging_lock()
+                , signal()
+                , time_to_die(false)
+                , storage_sample_buffer(c.storage_sample_buffer)
+                , logging_sample_buffer(c.logging_sample_buffer) {}
+        sampling_container(std::string n, std::string filepath, size_t bs)
+                : name(n)
+                , buffer_size(bs)
+                , storage_lock()
+                , logging_lock()
+                , signal()
+                , powerlog_file(filepath)
+                , time_to_die(false)
+                , storage_sample_buffer()
+                , logging_sample_buffer() {
+            storage_sample_buffer.reserve(buffer_size);
+            logging_sample_buffer.reserve(buffer_size);
+        }
+        ~sampling_container() {
+            powerlog_file.close();
         }
     };
 
@@ -104,7 +134,8 @@ private:
     std::ofstream powerlog_file;
     uint32_t frames_per_flush = 1;
     uint32_t frames_per_request = 1;
-    sensor::microseconds_type request_timeout = 5000;
+    sensor::microseconds_type sample_timeout = 5000;
+    size_t sample_buffer_size = 10000;
     bool asynchronous_logging = true;
     bool asynchronous_sampling = true;
     Config::Sensors sensors = {false, false, false, false};
@@ -119,8 +150,6 @@ private:
     uint64_t frame_counter = 0;
 
     // sampling
-    std::vector<sampling_container> sampling_containers;
-
     template<typename T>
     void sample_sensor(std::vector<T>& sensors);
     template<typename T>
@@ -129,8 +158,14 @@ private:
     template<typename T>
     void unbind_sensor(std::vector<T>& sensors);
 
+    std::vector<sampling_container> sampling_containers;
+    std::vector<std::thread> logging_threads;
+
     // helper functions
     static void sample_to_log(const measurement& sample);
+
+    static void write_log_header(std::ofstream& log_file);
+    static void sample_to_log(std::ofstream& log_file, const std::string& name, const compact_sample& sample);
 };
 
 } // namespace megamol::frontend

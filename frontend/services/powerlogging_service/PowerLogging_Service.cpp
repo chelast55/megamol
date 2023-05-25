@@ -9,6 +9,7 @@
 
 #include <power_overwhelming/convert_string.h>
 
+
 // local logging wrapper for your convenience until central MegaMol logger established
 #include "mmcore/utility/log/Log.h"
 
@@ -44,8 +45,11 @@ bool PowerLogging_Service::init(const Config& config) {
 #ifdef MEGAMOL_USE_POWER
     powerlog_file_path = config.powerlog_file;
     frames_per_flush = config.frames_per_flush;
+    frames_per_request = config.frames_per_request;
     asynchronous_logging = config.asynchronous_logging;
     asynchronous_sampling = config.asynchronous_sampling;
+    sample_timeout = config.sample_timeout;
+    sample_buffer_size = config.sample_buffer_size;
     sensors = config.sensors;
     if (!config.powerlog_file.empty()) {
         if (!powerlog_file.is_open()) {
@@ -56,7 +60,6 @@ bool PowerLogging_Service::init(const Config& config) {
                             << "Momentary Power Comsumption (W)" << std::endl;
         }
     }
-    frames_per_request = config.frames_per_request;
 
     if (sensors.nvml) {
         try {
@@ -117,6 +120,12 @@ void PowerLogging_Service::close() {
     }
 
     if (asynchronous_sampling) {
+        // flush rest of log and exit logging threads cleanly
+        for (auto& sc : sampling_containers)
+            sc.time_to_die = true;
+        for (auto& lt : logging_threads)
+            lt.join();
+
         unbind_sensor(adl_sensors);
         unbind_sensor(nvml_sensors);
         unbind_sensor(tinkerforge_sensors);
@@ -165,16 +174,6 @@ void PowerLogging_Service::postGraphRender() {
     }
 
     if (frame_counter % frames_per_flush == 0) {
-        if (asynchronous_sampling) { // "weird hybrid" for testing purposes (before proper logger thread is implemented)
-            for (auto& sc : sampling_containers) {
-                for (auto& sample : sc.sample_buffer) {
-                    powerlog_buffer << sc.name << ',' << sample.timestamp << ',' << sample.value << std::endl;
-                }
-                sc.lock.lock();
-                sc.sample_buffer.clear();
-                sc.lock.unlock();
-            }
-        }
         powerlog_file << powerlog_buffer.rdbuf();
     }
 
@@ -195,16 +194,49 @@ template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overw
 template<typename T>
 void PowerLogging_Service::bind_sensor(std::vector<T>& sensors) {
     for (auto& sensor : sensors) {
-        sampling_containers.emplace_back(visus::power_overwhelming::convert_string<char>(sensor.name()), 10000);
+        std::string sensor_name = visus::power_overwhelming::convert_string<char>(sensor.name());
+        std::string unique_file_path = std::to_string(std::hash<std::string>{}(sensor_name)) + ".csv";
+        sampling_containers.emplace_back(sensor_name, unique_file_path, sample_buffer_size);
+        write_log_header(sampling_containers.back().powerlog_file);
+
+        // setup asynchronous sampling
         sensor.sample(
-            [](const measurement& sample, void* sampling_container_v_pointer) {
-                auto sampling_container_pointer =
-                    static_cast<sampling_container*>(sampling_container_v_pointer);
-                sampling_container_pointer->lock.lock();
-                sampling_container_pointer->sample_buffer.emplace_back(sample.timestamp(), sample.power());
-                sampling_container_pointer->lock.unlock();
+            [](const measurement& sample, void* sc_void_pointer) {
+                auto sc_pointer = static_cast<sampling_container*>(sc_void_pointer);
+                sc_pointer->storage_lock.lock();
+                sc_pointer->storage_sample_buffer.emplace_back(sample.timestamp(), sample.power());
+
+                // swap buffers when program is exited or storage buffer is full
+                if (sc_pointer->time_to_die || sc_pointer->storage_sample_buffer.size() ==
+                    sc_pointer->buffer_size) {
+                    sc_pointer->logging_lock.lock();
+                    sc_pointer->storage_sample_buffer.swap(
+                        sc_pointer->logging_sample_buffer);
+                    sc_pointer->logging_lock.unlock();
+                    sc_pointer->signal.notify_one();
+                }
+                sc_pointer->storage_lock.unlock();
             },
-            this->request_timeout, &sampling_containers.back());
+            this->sample_timeout, &sampling_containers.back());
+
+        // setup asynchronous logging
+        logging_threads.emplace_back(
+            [](sampling_container* sc_pointer) {
+                while (true) {
+                    sc_pointer->logging_lock.lock();
+                    sc_pointer->signal.wait(sc_pointer->logging_lock);
+                    for (compact_sample& sample : sc_pointer->logging_sample_buffer) {
+                        sample_to_log(
+                            sc_pointer->powerlog_file, sc_pointer->name, sample);
+                    }
+                    sc_pointer->logging_sample_buffer.clear();
+                    sc_pointer->logging_lock.unlock();
+
+                    if (sc_pointer->time_to_die)
+                        break;
+                }
+            },
+            &sampling_containers.back());
     }
 }
 template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
@@ -212,16 +244,46 @@ template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhe
 
 void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors) {
     for (auto& sensor : sensors) {
-        sampling_containers.emplace_back(visus::power_overwhelming::convert_string<char>(sensor.name()), 10000);
+        std::string sensor_name = visus::power_overwhelming::convert_string<char>(sensor.name());
+        std::string unique_file_path = std::to_string(std::hash<std::string>{}(sensor_name)) + ".csv";
+        sampling_containers.emplace_back(sensor_name, unique_file_path, sample_buffer_size);
+        write_log_header(sampling_containers.back().powerlog_file);
+
+        // setup asynchronous sampling
         sensor.sample(
-            [](const measurement& sample, void* sampling_container_v_pointer) {
-                auto sampling_container_pointer =
-                    static_cast<sampling_container*>(sampling_container_v_pointer);
-                sampling_container_pointer->lock.lock();
-                sampling_container_pointer->sample_buffer.emplace_back(sample.timestamp(), sample.power());
-                sampling_container_pointer->lock.unlock();
+            [](const measurement& sample, void* sc_void_pointer) {
+                auto sc_pointer = static_cast<sampling_container*>(sc_void_pointer);
+                sc_pointer->storage_lock.lock();
+                sc_pointer->storage_sample_buffer.emplace_back(sample.timestamp(), sample.power());
+
+                // swap buffers when program is exited or storage buffer is full
+                if (sc_pointer->time_to_die || sc_pointer->storage_sample_buffer.size() == sc_pointer->buffer_size) {
+                    sc_pointer->logging_lock.lock();
+                    sc_pointer->storage_sample_buffer.swap(sc_pointer->logging_sample_buffer);
+                    sc_pointer->logging_lock.unlock();
+                    sc_pointer->signal.notify_one();
+                }
+                sc_pointer->storage_lock.unlock();
             },
-            tinkerforge_sensor_source::power, this->request_timeout, &sampling_containers.back());
+            tinkerforge_sensor_source::power, this->sample_timeout, &sampling_containers.back());
+
+        // setup asynchronous logging
+        logging_threads.emplace_back(
+            [](sampling_container* sc_pointer) {
+                while (true) {
+                    sc_pointer->logging_lock.lock();
+                    sc_pointer->signal.wait(sc_pointer->logging_lock);
+                    for (compact_sample& sample : sc_pointer->logging_sample_buffer) {
+                        sample_to_log(sc_pointer->powerlog_file, sc_pointer->name, sample);
+                    }
+                    sc_pointer->logging_sample_buffer.clear();
+                    sc_pointer->logging_lock.unlock();
+
+                    if (sc_pointer->time_to_die)
+                        break;
+                }
+            },
+            &sampling_containers.back());
     }
 }
 
@@ -233,12 +295,20 @@ void PowerLogging_Service::unbind_sensor(std::vector<T>& sensors) {
 }
 template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
 template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
-template void PowerLogging_Service::unbind_sensor(
-    std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
+template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
 
 void PowerLogging_Service::sample_to_log(const measurement& sample) {
     powerlog_buffer << visus::power_overwhelming::convert_string<char>(sample.sensor()) << ',' << sample.timestamp()
                     << ',' << sample.power() << std::endl;
+}
+
+void PowerLogging_Service::write_log_header(std::ofstream& log_file) {
+    log_file << "Sensor Name" << ',' << "Sample Timestamp (ms)" << ',' << "Momentary Power Comsumption (W)"
+                    << std::endl;
+}
+
+void PowerLogging_Service::sample_to_log(std::ofstream& log_file, const std::string& name, const compact_sample& sample) {
+    log_file << name << ',' << sample.timestamp << ',' << sample.value << std::endl;
 }
 
 std::stringstream PowerLogging_Service::powerlog_buffer;

@@ -177,7 +177,8 @@ int main(const int argc, const char** argv) {
     powerlogging_config.powerlog_file = "powerlog.csv"; // TODO: Do NOT hard-code! LUA?
     powerlogging_config.frames_per_flush = 1000;
     powerlogging_config.frames_per_request = 1;
-    powerlogging_config.request_timeout = 5000;
+    powerlogging_config.sample_timeout = 5000;
+    powerlogging_config.sample_buffer_size = 10000;
     powerlogging_config.asynchronous_logging = false;
     powerlogging_config.asynchronous_sampling = true;
     powerlogging_config.sensors.adl = true;
