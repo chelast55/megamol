@@ -158,7 +158,7 @@ private:
     template<typename T>
     void unbind_sensor(std::vector<T>& sensors);
 
-    std::vector<sampling_container> sampling_containers;
+    std::vector<std::unique_ptr<sampling_container>> sampling_containers;
     std::vector<std::thread> logging_threads;
 
     // helper functions

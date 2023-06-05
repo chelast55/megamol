@@ -15,6 +15,11 @@
 
 #include "power_overwhelming/dump_sensors.h"
 
+namespace {
+
+}
+
+
 static const std::string service_name = "PowerLogging_Service: ";
 static void log(std::string const& text) {
     const std::string msg = service_name + text;
@@ -93,6 +98,10 @@ bool PowerLogging_Service::init(const Config& config) {
 
             for (auto& tinkerforge_sensor_definition : tinkerforge_sensor_definitions) {
                 tinkerforge_sensors.push_back(tinkerforge_sensor(tinkerforge_sensor_definition));
+                tinkerforge_sensors.back().reset();
+                tinkerforge_sensors.back().configure(visus::power_overwhelming::sample_averaging::average_of_4,
+                    visus::power_overwhelming::conversion_time::microseconds_588,
+                    visus::power_overwhelming::conversion_time::microseconds_588);
             }
         } catch (std::exception& ex) {
             log_warning("Exception while initializing tinkerforge sensors");
@@ -122,7 +131,7 @@ void PowerLogging_Service::close() {
     if (asynchronous_sampling) {
         // flush rest of log and exit logging threads cleanly
         for (auto& sc : sampling_containers)
-            sc.time_to_die = true;
+            sc->time_to_die = true;
         for (auto& lt : logging_threads)
             lt.join();
 
@@ -196,8 +205,8 @@ void PowerLogging_Service::bind_sensor(std::vector<T>& sensors) {
     for (auto& sensor : sensors) {
         std::string sensor_name = visus::power_overwhelming::convert_string<char>(sensor.name());
         std::string unique_file_path = std::to_string(std::hash<std::string>{}(sensor_name)) + ".csv";
-        sampling_containers.emplace_back(sensor_name, unique_file_path, sample_buffer_size);
-        write_log_header(sampling_containers.back().powerlog_file);
+        sampling_containers.push_back(std::make_unique<sampling_container>(sensor_name, unique_file_path, sample_buffer_size));
+        write_log_header(sampling_containers.back()->powerlog_file);
 
         // setup asynchronous sampling
         sensor.sample(
@@ -217,7 +226,7 @@ void PowerLogging_Service::bind_sensor(std::vector<T>& sensors) {
                 }
                 sc_pointer->storage_lock.unlock();
             },
-            this->sample_timeout, &sampling_containers.back());
+            this->sample_timeout, sampling_containers.back().get());
 
         // setup asynchronous logging
         logging_threads.emplace_back(
@@ -236,7 +245,7 @@ void PowerLogging_Service::bind_sensor(std::vector<T>& sensors) {
                         break;
                 }
             },
-            &sampling_containers.back());
+            sampling_containers.back().get());
     }
 }
 template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
@@ -246,8 +255,9 @@ void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::ti
     for (auto& sensor : sensors) {
         std::string sensor_name = visus::power_overwhelming::convert_string<char>(sensor.name());
         std::string unique_file_path = std::to_string(std::hash<std::string>{}(sensor_name)) + ".csv";
-        sampling_containers.emplace_back(sensor_name, unique_file_path, sample_buffer_size);
-        write_log_header(sampling_containers.back().powerlog_file);
+        sampling_containers.push_back(
+            std::make_unique<sampling_container>(sensor_name, unique_file_path, sample_buffer_size));
+        write_log_header(sampling_containers.back()->powerlog_file);
 
         // setup asynchronous sampling
         sensor.sample(
@@ -265,7 +275,7 @@ void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::ti
                 }
                 sc_pointer->storage_lock.unlock();
             },
-            tinkerforge_sensor_source::power, this->sample_timeout, &sampling_containers.back());
+            tinkerforge_sensor_source::power, this->sample_timeout, sampling_containers.back().get());
 
         // setup asynchronous logging
         logging_threads.emplace_back(
@@ -283,7 +293,7 @@ void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::ti
                         break;
                 }
             },
-            &sampling_containers.back());
+            sampling_containers.back().get());
     }
 }
 
