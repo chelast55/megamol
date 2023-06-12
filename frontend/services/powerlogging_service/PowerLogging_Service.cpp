@@ -8,16 +8,15 @@
 #include "PowerLogging_Service.hpp"
 
 #include <power_overwhelming/convert_string.h>
-
+#include <power_overwhelming/dump_sensors.h>
 
 // local logging wrapper for your convenience until central MegaMol logger established
 #include "mmcore/utility/log/Log.h"
 
-#include "power_overwhelming/dump_sensors.h"
-
-namespace {
-
-}
+#include "FrameStatistics.h"
+#include "LuaCallbacksCollection.h"
+#include "ModuleGraphSubscription.h"
+#include "PerformanceManager.h"
 
 
 static const std::string service_name = "PowerLogging_Service: ";
@@ -112,11 +111,15 @@ bool PowerLogging_Service::init(const Config& config) {
     if (asynchronous_sampling) {
         bind_sensor(adl_sensors);
         bind_sensor(nvml_sensors);
-        bind_sensor(tinkerforge_sensors);
+        bind_sensor(tinkerforge_sensors, tinkerforge_sensor_source::power);
     }
 
     log("initialized successfully");
 #endif
+
+    _requestedResourcesNames = {"RegisterLuaCallbacks", frontend_resources::MegaMolGraph_Req_Name, "RenderNextFrame",
+        frontend_resources::MegaMolGraph_SubscriptionRegistry_Req_Name, frontend_resources::FrameStatistics_Req_Name};
+
     return true;
 }
 
@@ -151,7 +154,12 @@ const std::vector<std::string> PowerLogging_Service::getRequestedResourceNames()
 }
 
 void PowerLogging_Service::setRequestedResources(std::vector<FrontendResource> resources) {
+    _requestedResourcesReferences = resources;
 
+    auto& megamolgraph_subscription = const_cast<frontend_resources::MegaMolGraph_SubscriptionRegistry&>(
+        resources[3].getResource<frontend_resources::MegaMolGraph_SubscriptionRegistry>());
+
+    fill_lua_callbacks();
 }
 
 void PowerLogging_Service::updateProvidedResources() {
@@ -189,9 +197,8 @@ void PowerLogging_Service::postGraphRender() {
 }
 #endif
 
-template<typename T>
-void PowerLogging_Service::sample_sensor(std::vector<T>& sensors)
-{
+template<typename sensor_type>
+void PowerLogging_Service::sample_sensor(std::vector<sensor_type>& sensors) {
     for (auto& sensor : sensors) {
         sample_to_log(sensor.sample());
     }
@@ -200,58 +207,8 @@ template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overw
 template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
 template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
 
-template<typename T>
-void PowerLogging_Service::bind_sensor(std::vector<T>& sensors) {
-    for (auto& sensor : sensors) {
-        std::string sensor_name = visus::power_overwhelming::convert_string<char>(sensor.name());
-        std::string unique_file_path = std::to_string(std::hash<std::string>{}(sensor_name)) + ".csv";
-        sampling_containers.push_back(std::make_unique<sampling_container>(sensor_name, unique_file_path, sample_buffer_size));
-        write_log_header(sampling_containers.back()->powerlog_file);
-
-        // setup asynchronous sampling
-        sensor.sample(
-            [](const measurement& sample, void* sc_void_pointer) {
-                auto sc_pointer = static_cast<sampling_container*>(sc_void_pointer);
-                sc_pointer->storage_lock.lock();
-                sc_pointer->storage_sample_buffer.emplace_back(sample.timestamp(), sample.power());
-
-                // swap buffers when program is exited or storage buffer is full
-                if (sc_pointer->time_to_die || sc_pointer->storage_sample_buffer.size() ==
-                    sc_pointer->buffer_size) {
-                    sc_pointer->logging_lock.lock();
-                    sc_pointer->storage_sample_buffer.swap(
-                        sc_pointer->logging_sample_buffer);
-                    sc_pointer->logging_lock.unlock();
-                    sc_pointer->signal.notify_one();
-                }
-                sc_pointer->storage_lock.unlock();
-            },
-            this->sample_timeout, sampling_containers.back().get());
-
-        // setup asynchronous logging
-        logging_threads.emplace_back(
-            [](sampling_container* sc_pointer) {
-                while (true) {
-                    sc_pointer->logging_lock.lock();
-                    sc_pointer->signal.wait(sc_pointer->logging_lock);
-                    for (compact_sample& sample : sc_pointer->logging_sample_buffer) {
-                        sample_to_log(
-                            sc_pointer->powerlog_file, sc_pointer->name, sample);
-                    }
-                    sc_pointer->logging_sample_buffer.clear();
-                    sc_pointer->logging_lock.unlock();
-
-                    if (sc_pointer->time_to_die)
-                        break;
-                }
-            },
-            sampling_containers.back().get());
-    }
-}
-template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
-template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
-
-void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors) {
+template<typename sensor_type, typename... Args>
+void PowerLogging_Service::bind_sensor(std::vector<sensor_type>& sensors, Args&&... args) {
     for (auto& sensor : sensors) {
         std::string sensor_name = visus::power_overwhelming::convert_string<char>(sensor.name());
         std::string unique_file_path = std::to_string(std::hash<std::string>{}(sensor_name)) + ".csv";
@@ -260,45 +217,40 @@ void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::ti
         write_log_header(sampling_containers.back()->powerlog_file);
 
         // setup asynchronous sampling
-        sensor.sample(
-            [](const measurement& sample, void* sc_void_pointer) {
-                auto sc_pointer = static_cast<sampling_container*>(sc_void_pointer);
-                sc_pointer->storage_lock.lock();
-                sc_pointer->storage_sample_buffer.emplace_back(sample.timestamp(), sample.power());
-
-                // swap buffers when program is exited or storage buffer is full
-                if (sc_pointer->time_to_die || sc_pointer->storage_sample_buffer.size() == sc_pointer->buffer_size) {
-                    sc_pointer->logging_lock.lock();
-                    sc_pointer->storage_sample_buffer.swap(sc_pointer->logging_sample_buffer);
-                    sc_pointer->logging_lock.unlock();
-                    sc_pointer->signal.notify_one();
-                }
-                sc_pointer->storage_lock.unlock();
-            },
-            tinkerforge_sensor_source::power, this->sample_timeout, sampling_containers.back().get());
+        sensor.sample([](const measurement& sample,
+                          void* sc_void_pointer) { store_sample_and_flush_if_necessary(sample, sc_void_pointer); },
+            std::forward<Args>(args)..., this->sample_timeout, sampling_containers.back().get());
 
         // setup asynchronous logging
-        logging_threads.emplace_back(
-            [](sampling_container* sc_pointer) {
-                while (true) {
-                    sc_pointer->logging_lock.lock();
-                    sc_pointer->signal.wait(sc_pointer->logging_lock);
-                    for (compact_sample& sample : sc_pointer->logging_sample_buffer) {
-                        sample_to_log(sc_pointer->powerlog_file, sc_pointer->name, sample);
-                    }
-                    sc_pointer->logging_sample_buffer.clear();
-                    sc_pointer->logging_lock.unlock();
+        logging_threads.emplace_back(flush_powerlog_buffer_until_dead, sampling_containers.back().get());
+    }
+}
+template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
+template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
+//template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
 
-                    if (sc_pointer->time_to_die)
-                        break;
-                }
-            },
-            sampling_containers.back().get());
+template<typename... Args>
+void PowerLogging_Service::bind_sensor(
+    std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors, Args&&... args) {
+    for (auto& sensor : sensors) {
+        std::string sensor_name = visus::power_overwhelming::convert_string<char>(sensor.name());
+        std::string unique_file_path = std::to_string(std::hash<std::string>{}(sensor_name)) + ".csv";
+        sampling_containers.push_back(
+            std::make_unique<sampling_container>(sensor_name, unique_file_path, sample_buffer_size));
+        write_log_header(sampling_containers.back()->powerlog_file);
+
+        // setup asynchronous sampling
+        sensor.sample([](const measurement& sample,
+                          void* sc_void_pointer) { store_sample_and_flush_if_necessary(sample, sc_void_pointer); },
+            std::forward<Args>(args)..., this->sample_timeout, sampling_containers.back().get());
+
+        // setup asynchronous logging
+        logging_threads.emplace_back(flush_powerlog_buffer_until_dead, sampling_containers.back().get());
     }
 }
 
-template<typename T>
-void PowerLogging_Service::unbind_sensor(std::vector<T>& sensors) {
+template<typename sensor_type>
+void PowerLogging_Service::unbind_sensor(std::vector<sensor_type>& sensors) {
     for (auto& sensor : sensors) {
         sensor.sample(nullptr);
     }
@@ -312,6 +264,36 @@ void PowerLogging_Service::sample_to_log(const measurement& sample) {
                     << ',' << sample.power() << std::endl;
 }
 
+void PowerLogging_Service::store_sample_and_flush_if_necessary(const measurement& sample, void* sc_void_pointer) {
+    auto sc_pointer = static_cast<sampling_container*>(sc_void_pointer);
+    sc_pointer->storage_lock.lock();
+    sc_pointer->storage_sample_buffer.emplace_back(sample.timestamp(), sample.power());
+
+    // swap buffers when program is exited or storage buffer is full
+    if (sc_pointer->time_to_die || sc_pointer->storage_sample_buffer.size() == sc_pointer->buffer_size) {
+        sc_pointer->logging_lock.lock();
+        sc_pointer->storage_sample_buffer.swap(sc_pointer->logging_sample_buffer);
+        sc_pointer->logging_lock.unlock();
+        sc_pointer->signal.notify_one();
+    }
+    sc_pointer->storage_lock.unlock();
+}
+
+void PowerLogging_Service::flush_powerlog_buffer_until_dead(sampling_container* sc_pointer) {
+    while (true) {
+        sc_pointer->logging_lock.lock();
+        sc_pointer->signal.wait(sc_pointer->logging_lock);
+        for (compact_sample& sample : sc_pointer->logging_sample_buffer) {
+            sample_to_log(sc_pointer->powerlog_file, sc_pointer->name, sample);
+        }
+        sc_pointer->logging_sample_buffer.clear();
+        sc_pointer->logging_lock.unlock();
+
+        if (sc_pointer->time_to_die)
+            break;
+    }
+}
+
 void PowerLogging_Service::write_log_header(std::ofstream& log_file) {
     log_file << "Sensor Name" << ',' << "Sample Timestamp (ms)" << ',' << "Momentary Power Comsumption (W)"
                     << std::endl;
@@ -319,6 +301,97 @@ void PowerLogging_Service::write_log_header(std::ofstream& log_file) {
 
 void PowerLogging_Service::sample_to_log(std::ofstream& log_file, const std::string& name, const compact_sample& sample) {
     log_file << name << ',' << sample.timestamp << ',' << sample.value << std::endl;
+}
+
+void PowerLogging_Service::fill_lua_callbacks() {
+    frontend_resources::LuaCallbacksCollection callbacks;
+
+    /*auto& graph =
+        const_cast<core::MegaMolGraph&>(_requestedResourcesReferences[1].getResource<core::MegaMolGraph>());
+    auto& render_next_frame = _requestedResourcesReferences[2].getResource<std::function<bool()>>();
+
+    callbacks.add<frontend_resources::LuaCallbacksCollection::VoidResult, bool>(
+        "mmSetProfilingLogging", "(bool on)", {[&](bool on) -> frontend_resources::LuaCallbacksCollection::VoidResult {
+            this->profiling_logging.active = on;
+            return frontend_resources::LuaCallbacksCollection::VoidResult{};
+        }});
+
+    callbacks.add<frontend_resources::LuaCallbacksCollection::StringResult, std::string, std::string, int>(
+        "mmGenerateCameraScenes", "(string entrypoint, string camera_path_pattern, uint num_samples)",
+        {[&graph](std::string entrypoint, std::string camera_path_pattern,
+             int num_samples) -> frontend_resources::LuaCallbacksCollection::StringResult {
+            auto entry = graph.FindModule(entrypoint);
+            if (!entry)
+                return frontend_resources::LuaCallbacksCollection::Error{"could not find entrypoint"};
+            auto view = std::dynamic_pointer_cast<core::view::AbstractViewInterface>(entry);
+            if (!view)
+                return frontend_resources::LuaCallbacksCollection::Error{"requested entrypoint is not a view"};
+            auto cam_func = megamol::core::utility::GetCamScenesFunctional(camera_path_pattern);
+            if (!cam_func)
+                return frontend_resources::LuaCallbacksCollection::Error{"could not request camera path pattern"};
+            auto camera_samples = megamol::core::utility::SampleCameraScenes(view, cam_func, num_samples);
+            if (camera_samples.empty())
+                return frontend_resources::LuaCallbacksCollection::Error{"could not sample camera"};
+            return frontend_resources::LuaCallbacksCollection::StringResult{camera_samples};
+        }});
+
+
+    callbacks.add<frontend_resources::LuaCallbacksCollection::StringResult, std::string, std::string, int, bool>(
+        "mmProfile", "(string entrypoint, string cameras, unsigned int num_frames, bool pretty)",
+        {[&graph, &render_next_frame](std::string entrypoint, std::string cameras, int num_frames,
+             bool pretty) -> frontend_resources::LuaCallbacksCollection::StringResult {
+            auto entry = graph.FindModule(entrypoint);
+            if (!entry)
+                return frontend_resources::LuaCallbacksCollection::Error{"could not find entrypoint"};
+            auto view = std::dynamic_pointer_cast<core::view::AbstractViewInterface>(entry);
+            if (!view)
+                return frontend_resources::LuaCallbacksCollection::Error{"requested entrypoint is not a view"};
+
+            auto serializer = core::view::CameraSerializer();
+            std::vector<core::view::Camera> cams;
+            serializer.deserialize(cams, cameras);
+
+            auto const old_cam = view->GetCamera();
+
+            uint64_t tot_num_frames = num_frames * cams.size();
+
+            auto const tp_start = std::chrono::system_clock::now();
+            for (auto const& cam : cams) {
+                view->SetCamera(cam);
+                for (unsigned int f_idx = 0; f_idx < num_frames; ++f_idx) {
+                    render_next_frame();
+                }
+            }
+            auto const tp_end = std::chrono::system_clock::now();
+
+            view->SetCamera(old_cam);
+
+            auto const duration = tp_end - tp_start;
+
+            auto const time_in_ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+
+            auto const time_per_frame = static_cast<float>(time_in_ms) / static_cast<float>(tot_num_frames);
+
+            std::stringstream sstr;
+            if (pretty) {
+                sstr << "Total Number of Frames: " << tot_num_frames << "; Elapsed Time (ms): "
+                     << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count()
+                     << "; Time per Frame (ms): " << time_per_frame;
+            } else {
+                sstr << tot_num_frames << ", "
+                     << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << ", "
+                     << time_per_frame;
+            }
+
+            return frontend_resources::LuaCallbacksCollection::StringResult{sstr.str()};
+        }});*/
+
+
+    auto& register_callbacks =
+        _requestedResourcesReferences[0]
+            .getResource<std::function<void(frontend_resources::LuaCallbacksCollection const&)>>();
+
+    register_callbacks(callbacks);
 }
 
 std::stringstream PowerLogging_Service::powerlog_buffer;

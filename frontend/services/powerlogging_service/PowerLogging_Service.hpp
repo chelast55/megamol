@@ -150,22 +150,27 @@ private:
     uint64_t frame_counter = 0;
 
     // sampling
-    template<typename T>
-    void sample_sensor(std::vector<T>& sensors);
-    template<typename T>
-    void bind_sensor(std::vector<T>& sensors);
-    void bind_sensor(std::vector<tinkerforge_sensor>& sensors);
-    template<typename T>
-    void unbind_sensor(std::vector<T>& sensors);
+    template<typename sensor_type>
+    void sample_sensor(std::vector<sensor_type>& sensors);
+    template<typename sensor_type, typename... Args>
+    void bind_sensor(std::vector<sensor_type>& sensors, Args&&... args);
+    template<typename... Args>
+    void bind_sensor(std::vector<tinkerforge_sensor>& sensors, Args&&... args);
+    template<typename sensor_type>
+    void unbind_sensor(std::vector<sensor_type>& sensors);
 
     std::vector<std::unique_ptr<sampling_container>> sampling_containers;
     std::vector<std::thread> logging_threads;
 
     // helper functions
     static void sample_to_log(const measurement& sample);
+    static void store_sample_and_flush_if_necessary(const measurement& sample, void* sc_void_pointer);
+    static void flush_powerlog_buffer_until_dead(sampling_container* sc_pointer);
 
     static void write_log_header(std::ofstream& log_file);
     static void sample_to_log(std::ofstream& log_file, const std::string& name, const compact_sample& sample);
+
+    void fill_lua_callbacks();
 };
 
 } // namespace megamol::frontend

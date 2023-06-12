@@ -179,7 +179,7 @@ int main(const int argc, const char** argv) {
     powerlogging_config.frames_per_request = 1;
     powerlogging_config.sample_timeout = 5000;
     powerlogging_config.sample_buffer_size = 10000;
-    powerlogging_config.asynchronous_logging = false;
+    powerlogging_config.asynchronous_logging = true;
     powerlogging_config.asynchronous_sampling = true;
     powerlogging_config.sensors.adl = true;
     powerlogging_config.sensors.nvml = true;
