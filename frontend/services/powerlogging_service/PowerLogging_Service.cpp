@@ -10,6 +10,7 @@
 #include <power_overwhelming/convert_string.h>
 #include <power_overwhelming/dump_sensors.h>
 
+#include "mmcore/MegaMolGraph.h"
 // local logging wrapper for your convenience until central MegaMol logger established
 #include "mmcore/utility/log/Log.h"
 
@@ -55,6 +56,7 @@ bool PowerLogging_Service::init(const Config& config) {
     sample_timeout = config.sample_timeout;
     sample_buffer_size = config.sample_buffer_size;
     sensors = config.sensors;
+
     if (!config.powerlog_file.empty()) {
         if (!powerlog_file.is_open()) {
             powerlog_file = std::ofstream(powerlog_file_path);
@@ -222,7 +224,8 @@ void PowerLogging_Service::bind_sensor(std::vector<sensor_type>& sensors, Args&&
             std::forward<Args>(args)..., this->sample_timeout, sampling_containers.back().get());
 
         // setup asynchronous logging
-        logging_threads.emplace_back(flush_powerlog_buffer_until_dead, sampling_containers.back().get());
+        if (asynchronous_logging)
+            logging_threads.emplace_back(flush_powerlog_buffer, sampling_containers.back().get());
     }
 }
 template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
@@ -245,7 +248,8 @@ void PowerLogging_Service::bind_sensor(
             std::forward<Args>(args)..., this->sample_timeout, sampling_containers.back().get());
 
         // setup asynchronous logging
-        logging_threads.emplace_back(flush_powerlog_buffer_until_dead, sampling_containers.back().get());
+        if (asynchronous_logging)
+            logging_threads.emplace_back(flush_powerlog_buffer, sampling_containers.back().get());
     }
 }
 
@@ -259,27 +263,22 @@ template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overw
 template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
 template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
 
-void PowerLogging_Service::sample_to_log(const measurement& sample) {
-    powerlog_buffer << visus::power_overwhelming::convert_string<char>(sample.sensor()) << ',' << sample.timestamp()
-                    << ',' << sample.power() << std::endl;
-}
-
 void PowerLogging_Service::store_sample_and_flush_if_necessary(const measurement& sample, void* sc_void_pointer) {
     auto sc_pointer = static_cast<sampling_container*>(sc_void_pointer);
-    sc_pointer->storage_lock.lock();
-    sc_pointer->storage_sample_buffer.emplace_back(sample.timestamp(), sample.power());
+    sc_pointer->active_sampling_lock.lock();
+    sc_pointer->active_sample_buffer.emplace_back(sample.timestamp(), sample.power());
 
     // swap buffers when program is exited or storage buffer is full
-    if (sc_pointer->time_to_die || sc_pointer->storage_sample_buffer.size() == sc_pointer->buffer_size) {
+    if (sc_pointer->time_to_die || sc_pointer->active_sample_buffer.size() == sc_pointer->buffer_size) {
         sc_pointer->logging_lock.lock();
-        sc_pointer->storage_sample_buffer.swap(sc_pointer->logging_sample_buffer);
+        sc_pointer->active_sample_buffer.swap(sc_pointer->logging_sample_buffer);
         sc_pointer->logging_lock.unlock();
         sc_pointer->signal.notify_one();
     }
-    sc_pointer->storage_lock.unlock();
+    sc_pointer->active_sampling_lock.unlock();
 }
 
-void PowerLogging_Service::flush_powerlog_buffer_until_dead(sampling_container* sc_pointer) {
+void PowerLogging_Service::flush_powerlog_buffer(sampling_container* sc_pointer) {
     while (true) {
         sc_pointer->logging_lock.lock();
         sc_pointer->signal.wait(sc_pointer->logging_lock);
@@ -303,95 +302,71 @@ void PowerLogging_Service::sample_to_log(std::ofstream& log_file, const std::str
     log_file << name << ',' << sample.timestamp << ',' << sample.value << std::endl;
 }
 
+void PowerLogging_Service::sample_to_log(const measurement& sample) {
+    powerlog_buffer << visus::power_overwhelming::convert_string<char>(sample.sensor()) << ',' << sample.timestamp()
+                    << ',' << sample.power() << std::endl;
+}
+
 void PowerLogging_Service::fill_lua_callbacks() {
     frontend_resources::LuaCallbacksCollection callbacks;
 
-    /*auto& graph =
+    auto& graph =
         const_cast<core::MegaMolGraph&>(_requestedResourcesReferences[1].getResource<core::MegaMolGraph>());
     auto& render_next_frame = _requestedResourcesReferences[2].getResource<std::function<bool()>>();
 
-    callbacks.add<frontend_resources::LuaCallbacksCollection::VoidResult, bool>(
-        "mmSetProfilingLogging", "(bool on)", {[&](bool on) -> frontend_resources::LuaCallbacksCollection::VoidResult {
-            this->profiling_logging.active = on;
+    callbacks.add<frontend_resources::LuaCallbacksCollection::VoidResult>(
+        "mmFlushPowerlog", "()", {[&]() -> frontend_resources::LuaCallbacksCollection::VoidResult {
+            this->onLuaFlushPowerlog();
             return frontend_resources::LuaCallbacksCollection::VoidResult{};
         }});
 
-    callbacks.add<frontend_resources::LuaCallbacksCollection::StringResult, std::string, std::string, int>(
-        "mmGenerateCameraScenes", "(string entrypoint, string camera_path_pattern, uint num_samples)",
-        {[&graph](std::string entrypoint, std::string camera_path_pattern,
-             int num_samples) -> frontend_resources::LuaCallbacksCollection::StringResult {
-            auto entry = graph.FindModule(entrypoint);
-            if (!entry)
-                return frontend_resources::LuaCallbacksCollection::Error{"could not find entrypoint"};
-            auto view = std::dynamic_pointer_cast<core::view::AbstractViewInterface>(entry);
-            if (!view)
-                return frontend_resources::LuaCallbacksCollection::Error{"requested entrypoint is not a view"};
-            auto cam_func = megamol::core::utility::GetCamScenesFunctional(camera_path_pattern);
-            if (!cam_func)
-                return frontend_resources::LuaCallbacksCollection::Error{"could not request camera path pattern"};
-            auto camera_samples = megamol::core::utility::SampleCameraScenes(view, cam_func, num_samples);
-            if (camera_samples.empty())
-                return frontend_resources::LuaCallbacksCollection::Error{"could not sample camera"};
-            return frontend_resources::LuaCallbacksCollection::StringResult{camera_samples};
+    callbacks.add<frontend_resources::LuaCallbacksCollection::VoidResult>(
+        "mmSwapPowerlogBuffers", "()", {[&]() -> frontend_resources::LuaCallbacksCollection::VoidResult {
+            this->onLuaSwapPowerlogBuffers(false, false);
+            return frontend_resources::LuaCallbacksCollection::VoidResult{};
         }});
 
-
-    callbacks.add<frontend_resources::LuaCallbacksCollection::StringResult, std::string, std::string, int, bool>(
-        "mmProfile", "(string entrypoint, string cameras, unsigned int num_frames, bool pretty)",
-        {[&graph, &render_next_frame](std::string entrypoint, std::string cameras, int num_frames,
-             bool pretty) -> frontend_resources::LuaCallbacksCollection::StringResult {
-            auto entry = graph.FindModule(entrypoint);
-            if (!entry)
-                return frontend_resources::LuaCallbacksCollection::Error{"could not find entrypoint"};
-            auto view = std::dynamic_pointer_cast<core::view::AbstractViewInterface>(entry);
-            if (!view)
-                return frontend_resources::LuaCallbacksCollection::Error{"requested entrypoint is not a view"};
-
-            auto serializer = core::view::CameraSerializer();
-            std::vector<core::view::Camera> cams;
-            serializer.deserialize(cams, cameras);
-
-            auto const old_cam = view->GetCamera();
-
-            uint64_t tot_num_frames = num_frames * cams.size();
-
-            auto const tp_start = std::chrono::system_clock::now();
-            for (auto const& cam : cams) {
-                view->SetCamera(cam);
-                for (unsigned int f_idx = 0; f_idx < num_frames; ++f_idx) {
-                    render_next_frame();
-                }
-            }
-            auto const tp_end = std::chrono::system_clock::now();
-
-            view->SetCamera(old_cam);
-
-            auto const duration = tp_end - tp_start;
-
-            auto const time_in_ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-
-            auto const time_per_frame = static_cast<float>(time_in_ms) / static_cast<float>(tot_num_frames);
-
-            std::stringstream sstr;
-            if (pretty) {
-                sstr << "Total Number of Frames: " << tot_num_frames << "; Elapsed Time (ms): "
-                     << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count()
-                     << "; Time per Frame (ms): " << time_per_frame;
-            } else {
-                sstr << tot_num_frames << ", "
-                     << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << ", "
-                     << time_per_frame;
-            }
-
-            return frontend_resources::LuaCallbacksCollection::StringResult{sstr.str()};
-        }});*/
-
+    callbacks.add<frontend_resources::LuaCallbacksCollection::VoidResult, bool, bool>("mmSwapAndClearPowerlogBuffers",
+        "(bool clear_active_buffer, bool clear_logging_buffer)",
+        {[&](bool clear_active_buffer,
+             bool clear_logging_buffer) -> frontend_resources::LuaCallbacksCollection::VoidResult {
+            this->onLuaSwapPowerlogBuffers(clear_active_buffer, clear_logging_buffer);
+            return frontend_resources::LuaCallbacksCollection::VoidResult{};
+        }});
 
     auto& register_callbacks =
         _requestedResourcesReferences[0]
             .getResource<std::function<void(frontend_resources::LuaCallbacksCollection const&)>>();
 
     register_callbacks(callbacks);
+}
+
+void PowerLogging_Service::onLuaFlushPowerlog() {
+    for (auto& sc : sampling_containers) {
+        sc.get()->time_to_die = true; // convenient way for waiting for current sample to finish, swap buffers
+        flush_powerlog_buffer(sc.get()); // loop only executed once because of above line
+        sc.get()->time_to_die = false;
+        log("LUA: flushed powerlog!");
+    }
+}
+
+void PowerLogging_Service::onLuaSwapPowerlogBuffers(bool clear_active_buffer, bool clear_logging_buffer) {
+    for (auto& sc : sampling_containers) {
+        sc.get()->active_sampling_lock.lock();
+        sc.get()->logging_lock.lock();
+        if (clear_active_buffer) {
+            sc.get()->active_sample_buffer.clear();
+            log("LUA: cleared active sample buffer!");
+        }
+        if (clear_logging_buffer) {
+            sc.get()->logging_sample_buffer.clear();
+            log("LUA: cleared logging sample buffer!");
+        }
+        sc.get()->active_sample_buffer.swap(sc.get()->logging_sample_buffer);
+        log("LUA: swapped powerlog buffers!");
+        sc.get()->active_sampling_lock.unlock();
+        sc.get()->logging_lock.unlock();
+    }
 }
 
 std::stringstream PowerLogging_Service::powerlog_buffer;

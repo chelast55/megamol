@@ -77,6 +77,10 @@ public:
     void preGraphRender() override;
     void postGraphRender() override;
 
+    // LUA callbacks
+    void onLuaFlushPowerlog();
+    void onLuaSwapPowerlogBuffers(bool clear_active_buffer, bool clear_logging_buffer);
+
 private:
 
     struct compact_sample {
@@ -89,34 +93,34 @@ private:
     struct sampling_container {
         const std::string name;
         const size_t buffer_size;
-        std::mutex storage_lock;
+        std::mutex active_sampling_lock;
         std::mutex logging_lock;
         std::condition_variable_any signal;
         std::ofstream powerlog_file;
         bool time_to_die;
-        std::vector<compact_sample> storage_sample_buffer;
+        std::vector<compact_sample> active_sample_buffer;
         std::vector<compact_sample> logging_sample_buffer;
 
         sampling_container(const sampling_container& c)
                 : name(c.name)
                 , buffer_size(c.buffer_size)
-                , storage_lock()
+                , active_sampling_lock()
                 , logging_lock()
                 , signal()
                 , time_to_die(false)
-                , storage_sample_buffer(c.storage_sample_buffer)
+                , active_sample_buffer(c.active_sample_buffer)
                 , logging_sample_buffer(c.logging_sample_buffer) {}
         sampling_container(std::string n, std::string filepath, size_t bs)
                 : name(n)
                 , buffer_size(bs)
-                , storage_lock()
+                , active_sampling_lock()
                 , logging_lock()
                 , signal()
                 , powerlog_file(filepath)
                 , time_to_die(false)
-                , storage_sample_buffer()
+                , active_sample_buffer()
                 , logging_sample_buffer() {
-            storage_sample_buffer.reserve(buffer_size);
+            active_sample_buffer.reserve(buffer_size);
             logging_sample_buffer.reserve(buffer_size);
         }
         ~sampling_container() {
@@ -163,12 +167,12 @@ private:
     std::vector<std::thread> logging_threads;
 
     // helper functions
-    static void sample_to_log(const measurement& sample);
     static void store_sample_and_flush_if_necessary(const measurement& sample, void* sc_void_pointer);
-    static void flush_powerlog_buffer_until_dead(sampling_container* sc_pointer);
+    static void flush_powerlog_buffer(sampling_container* sc_pointer);
 
     static void write_log_header(std::ofstream& log_file);
     static void sample_to_log(std::ofstream& log_file, const std::string& name, const compact_sample& sample);
+    static void sample_to_log(const measurement& sample);
 
     void fill_lua_callbacks();
 };
