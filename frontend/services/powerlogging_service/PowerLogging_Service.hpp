@@ -81,6 +81,8 @@ public:
     void onLuaFlushPowerlog();
     void onLuaSwapPowerlogBuffers(bool clear_active_buffer, bool clear_logging_buffer);
 
+    std::string instance_name;
+
 private:
 
     struct compact_sample {
@@ -158,8 +160,8 @@ private:
     void sample_sensor(std::vector<sensor_type>& sensors);
     template<typename sensor_type, typename... Args>
     void bind_sensor(std::vector<sensor_type>& sensors, Args&&... args);
-    template<typename... Args>
-    void bind_sensor(std::vector<tinkerforge_sensor>& sensors, Args&&... args);
+    //template<typename... Args>
+    //void bind_sensor(std::vector<tinkerforge_sensor>& sensors, Args&&... args);
     template<typename sensor_type>
     void unbind_sensor(std::vector<sensor_type>& sensors);
 

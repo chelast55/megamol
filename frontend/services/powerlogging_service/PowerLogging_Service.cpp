@@ -57,6 +57,12 @@ bool PowerLogging_Service::init(const Config& config) {
     sample_buffer_size = config.sample_buffer_size;
     sensors = config.sensors;
 
+    // generate instance name that changes for every execution (used to stop replacing powerlog files from past executions)
+    auto current_time = std::chrono::system_clock::now();
+    instance_name =
+        std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(current_time.time_since_epoch()).count() +
+                       11644473600000LL).substr(3);
+
     if (!config.powerlog_file.empty()) {
         if (!powerlog_file.is_open()) {
             powerlog_file = std::ofstream(powerlog_file_path);
@@ -205,15 +211,15 @@ void PowerLogging_Service::sample_sensor(std::vector<sensor_type>& sensors) {
         sample_to_log(sensor.sample());
     }
 }
-template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
-template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
-template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
+//template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
+//template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
+//template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
 
 template<typename sensor_type, typename... Args>
 void PowerLogging_Service::bind_sensor(std::vector<sensor_type>& sensors, Args&&... args) {
     for (auto& sensor : sensors) {
         std::string sensor_name = visus::power_overwhelming::convert_string<char>(sensor.name());
-        std::string unique_file_path = std::to_string(std::hash<std::string>{}(sensor_name)) + ".csv";
+        std::string unique_file_path = instance_name + '_' + std::to_string(std::hash<std::string>{}(sensor_name)) + ".csv";
         sampling_containers.push_back(
             std::make_unique<sampling_container>(sensor_name, unique_file_path, sample_buffer_size));
         write_log_header(sampling_containers.back()->powerlog_file);
@@ -228,10 +234,10 @@ void PowerLogging_Service::bind_sensor(std::vector<sensor_type>& sensors, Args&&
             logging_threads.emplace_back(flush_powerlog_buffer, sampling_containers.back().get());
     }
 }
-template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
-template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
+//template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
+//template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
 //template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
-
+/*
 template<typename... Args>
 void PowerLogging_Service::bind_sensor(
     std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors, Args&&... args) {
@@ -252,16 +258,16 @@ void PowerLogging_Service::bind_sensor(
             logging_threads.emplace_back(flush_powerlog_buffer, sampling_containers.back().get());
     }
 }
-
+*/
 template<typename sensor_type>
 void PowerLogging_Service::unbind_sensor(std::vector<sensor_type>& sensors) {
     for (auto& sensor : sensors) {
         sensor.sample(nullptr);
     }
 }
-template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
-template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
-template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
+//template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
+//template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
+//template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
 
 void PowerLogging_Service::store_sample_and_flush_if_necessary(const measurement& sample, void* sc_void_pointer) {
     auto sc_pointer = static_cast<sampling_container*>(sc_void_pointer);
@@ -332,6 +338,22 @@ void PowerLogging_Service::fill_lua_callbacks() {
              bool clear_logging_buffer) -> frontend_resources::LuaCallbacksCollection::VoidResult {
             this->onLuaSwapPowerlogBuffers(clear_active_buffer, clear_logging_buffer);
             return frontend_resources::LuaCallbacksCollection::VoidResult{};
+        }});
+
+    callbacks.add<frontend_resources::LuaCallbacksCollection::StringResult>("mmGetPowerTimeStamp",
+        "(void)\n\tReturns a numeric timestamp matching the format used within the power overwhelming library.",
+        {[&]() -> frontend_resources::LuaCallbacksCollection::StringResult {
+            auto current_time = std::chrono::system_clock::now();
+            std::string timestamp = std::to_string(
+                std::chrono::duration_cast<std::chrono::milliseconds>(current_time.time_since_epoch()).count() +
+                11644473600000LL); // shift from UNIX epoch (1.1.1970) to Windows epoch (1.1.1601)
+            return frontend_resources::LuaCallbacksCollection::StringResult(timestamp);
+        }});
+
+    callbacks.add<frontend_resources::LuaCallbacksCollection::StringResult>("mmGetInstanceName",
+        "(void)\n\tReturns a string that changes on each execution of PowerloggingService (used for unique file names)",
+        {[&]() -> frontend_resources::LuaCallbacksCollection::StringResult {
+            return frontend_resources::LuaCallbacksCollection::StringResult(this->instance_name);
         }});
 
     auto& register_callbacks =
