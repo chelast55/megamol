@@ -211,9 +211,6 @@ void PowerLogging_Service::sample_sensor(std::vector<sensor_type>& sensors) {
         sample_to_log(sensor.sample());
     }
 }
-//template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
-//template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
-//template void PowerLogging_Service::sample_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
 
 template<typename sensor_type, typename... Args>
 void PowerLogging_Service::bind_sensor(std::vector<sensor_type>& sensors, Args&&... args) {
@@ -234,40 +231,13 @@ void PowerLogging_Service::bind_sensor(std::vector<sensor_type>& sensors, Args&&
             logging_threads.emplace_back(flush_powerlog_buffer, sampling_containers.back().get());
     }
 }
-//template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
-//template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
-//template void PowerLogging_Service::bind_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
-/*
-template<typename... Args>
-void PowerLogging_Service::bind_sensor(
-    std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors, Args&&... args) {
-    for (auto& sensor : sensors) {
-        std::string sensor_name = visus::power_overwhelming::convert_string<char>(sensor.name());
-        std::string unique_file_path = std::to_string(std::hash<std::string>{}(sensor_name)) + ".csv";
-        sampling_containers.push_back(
-            std::make_unique<sampling_container>(sensor_name, unique_file_path, sample_buffer_size));
-        write_log_header(sampling_containers.back()->powerlog_file);
 
-        // setup asynchronous sampling
-        sensor.sample([](const measurement& sample,
-                          void* sc_void_pointer) { store_sample_and_flush_if_necessary(sample, sc_void_pointer); },
-            std::forward<Args>(args)..., this->sample_timeout, sampling_containers.back().get());
-
-        // setup asynchronous logging
-        if (asynchronous_logging)
-            logging_threads.emplace_back(flush_powerlog_buffer, sampling_containers.back().get());
-    }
-}
-*/
 template<typename sensor_type>
 void PowerLogging_Service::unbind_sensor(std::vector<sensor_type>& sensors) {
     for (auto& sensor : sensors) {
         sensor.sample(nullptr);
     }
 }
-//template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::adl_sensor>& sensors);
-//template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::nvml_sensor>& sensors);
-//template void PowerLogging_Service::unbind_sensor(std::vector<visus::power_overwhelming::tinkerforge_sensor>& sensors);
 
 void PowerLogging_Service::store_sample_and_flush_if_necessary(const measurement& sample, void* sc_void_pointer) {
     auto sc_pointer = static_cast<sampling_container*>(sc_void_pointer);
