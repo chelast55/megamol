@@ -1,12 +1,12 @@
 GENERAL_TEST_CASE_NAME = "infovis"
 PER_CASE_DURATION = 5 -- seconds
 
-RESOLUTIONS = {480, 720, 1080, 1440, 2160}
 DATASETS = {
 	[=[E:/B.Sc.Arbeit/daten/iris.mmft]=],
 	[=[E:/B.Sc.Arbeit/daten/Balken.mmft]=],
 	[=[E:/B.Sc.Arbeit/daten/Drops.mmft]=]
 }
+RESOLUTIONS = {480, 720, 1080, 1440, 2160}
 
 function splitString(input_string, separator)
 	local split_string = {}

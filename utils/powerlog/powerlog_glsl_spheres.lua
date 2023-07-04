@@ -1,6 +1,9 @@
 GENERAL_TEST_CASE_NAME = "glsl_spheres"
 PER_CASE_DURATION = 5 -- seconds
 
+DATASETS = {
+	[=[E:/B.Sc.Arbeit/daten/expl30m_bin_fix_a-90.mmpld]=]
+}
 RESOLUTIONS = {480, 720, 1080, 1440, 2160}
 CAMERA_ANGLE_COUNT = 5
 
@@ -50,50 +53,59 @@ for i = 1,CAMERA_ANGLE_COUNT do
 	camera_angles[i] = camera_angles[i] .. "}"
 end
 
--- Loop over resolution parameter
-for _, height in ipairs(RESOLUTIONS) do
-
-	-- Set resolution to view framebuffer and window
-	width = math.ceil(height * (16/9))
-	mmSetViewFramebufferSize("::view", width, height)
-	mmSetWindowFramebufferSize(width, height)
-	mmRenderNextFrame() -- Always render a dummy frame to apply changes
-	  
-	-- View reset to center screen after resolution change
-	mmSetParamValue("::view::view::resetView", [=[true]=])
+-- Loop over dataset parameters
+for _, dataset_path in ipairs(DATASETS) do
+	mmSetParamValue("::data::filename", dataset_path)
 	mmRenderNextFrame()
-	
-	-- Loop for different camera angles
-	for i=1,CAMERA_ANGLE_COUNT do
-		-- create a unique filename for the current parameter set
-		test_case_name = GENERAL_TEST_CASE_NAME .. "_" .. height .. "p" .. "_" .. "cam" .. i
-		
-		-- set camera angle
-		mmSetParamValue("::view::camstore::settings", camera_angles[i])
-		mmSetParamValue("::view::camstore::restorecam", [=[true]=])
-		
-		-- Optionally store a screenshot of the view (or window)
-		--mmScreenshotEntryPoint( "::view", test_case_name .. ".png")
-		--mmScreenshot(test_case_name .. ".png")
-		
-		-- Render a few dummy frames as warmup
-		for i = 1, 10 do
-		  mmRenderNextFrame()
-		end
-		
-		-- Discard as many in-between-samples as possible
-		mmSwapPowerlogBuffers()
-		
-		-- Run bechmark and store start/end timestamps (power logging happens within megamol)
-		timestamp_file = timestamp_file .. test_case_name .. "|" .. "start" .. "," .. mmGetPowerTimeStamp() .. ",\n"
-		render(PER_CASE_DURATION)
-		timestamp_file = timestamp_file .. test_case_name .. "|" .. "end" .. "," .. mmGetPowerTimeStamp() .. ",\n"
-		
-		-- Flush sample buffer into powerlog file
-		mmFlushPowerlog()
 
+	-- Loop over resolution parameter
+	for _, height in ipairs(RESOLUTIONS) do
+
+		-- Set resolution to view framebuffer and window
+		width = math.ceil(height * (16/9))
+		mmSetViewFramebufferSize("::view", width, height)
+		mmSetWindowFramebufferSize(width, height)
+		mmRenderNextFrame() -- Always render a dummy frame to apply changes
+		  
+		-- View reset to center screen after resolution change
+		mmSetParamValue("::view::view::resetView", [=[true]=])
+		mmRenderNextFrame()
+		
+		-- Loop for different camera angles
+		for i=1,CAMERA_ANGLE_COUNT do
+		
+			-- create a unique filename for the current parameter set
+			split_path = splitString(dataset_path, "/")
+			dataset_name = splitString(split_path[#split_path], ".")[1]
+			test_case_name = GENERAL_TEST_CASE_NAME .. "_" .. dataset_name .. "_" .. height .. "p" .. "_" .. "cam" .. i
+			
+			-- set camera angle
+			mmSetParamValue("::view::camstore::settings", camera_angles[i])
+			mmSetParamValue("::view::camstore::restorecam", [=[true]=])
+			mmRenderNextFrame()
+			
+			-- Optionally store a screenshot of the view (or window)
+			--mmScreenshotEntryPoint( "::view", test_case_name .. ".png")
+			--mmScreenshot(test_case_name .. ".png")
+			
+			-- Render a few dummy frames as warmup
+			for i = 1, 10 do
+			  mmRenderNextFrame()
+			end
+			
+			-- Discard as many in-between-samples as possible
+			mmSwapPowerlogBuffers()
+			
+			-- Run bechmark and store start/end timestamps (power logging happens within megamol)
+			timestamp_file = timestamp_file .. test_case_name .. "|" .. "start" .. "," .. mmGetPowerTimeStamp() .. ",\n"
+			render(PER_CASE_DURATION)
+			timestamp_file = timestamp_file .. test_case_name .. "|" .. "end" .. "," .. mmGetPowerTimeStamp() .. ",\n"
+			
+			-- Flush sample buffer into powerlog file
+			mmFlushPowerlog()
+
+		end
 	end
-	
 end
 
 -- Write timestamp file
