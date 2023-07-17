@@ -88,6 +88,9 @@ public:
     }
     GroupPtr_t GetGroup(ImGuiID group_uid);
     ImGuiID AddGroupModule(const std::string& group_name, const ModulePtr_t& module_ptr, bool use_queue = true);
+    ImGuiID AddGroupModule(ImGuiID group_uid, const ModulePtr_t& module_ptr, bool use_queue = true);
+    ImGuiID RemoveGroupModule(
+        ImGuiID group_uid, ImGuiID module_uid, bool use_queue = true, bool reset_interface = true);
 
     void Clear();
 
@@ -137,10 +140,6 @@ public:
         return this->name;
     }
 
-    void ForceUpdate() {
-        this->gui_update = true;
-    }
-
     void ResetStatePointers() {
         this->gui_graph_state.interact.callslot_compat_ptr.reset();
         this->gui_graph_state.interact.interfaceslot_compat_ptr.reset();
@@ -158,8 +157,10 @@ public:
     ImGuiID GetSelectedInterfaceSlot() const {
         return this->gui_graph_state.interact.interfaceslot_selected_uid;
     }
-    ImGuiID GetDropSlot() const {
-        return this->gui_graph_state.interact.slot_dropped_uid;
+    UIDPair_t ConsumeDragAndDropSlots() {
+        auto drag_drop_uids = this->gui_graph_state.interact.slot_drag_drop_uids;
+        this->gui_graph_state.interact.slot_drag_drop_uids = UIDPair_t(GUI_INVALID_ID, GUI_INVALID_ID);
+        return drag_drop_uids;
     }
     bool IsCanvasHovered() const {
         return this->gui_canvas_hovered;

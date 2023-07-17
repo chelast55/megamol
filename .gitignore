@@ -11,6 +11,10 @@ build-*/
 build_*/
 cmake-build-*/
 
+# Bundled vcpkg
+/vcpkg/
+/vcpkg_assets/
+
 # In-source-build artifacts
 /CMakeFiles/
 /CMakeCache.txt

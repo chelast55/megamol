@@ -1,10 +1,3 @@
-/*
- * Screenshot_Service.hpp
- *
- * Copyright (C) 2020 by MegaMol Team
- * Alle Rechte vorbehalten.
- */
-
 #pragma once
 
 #include <fstream>
@@ -59,6 +52,6 @@ private:
     std::stringstream log_buffer;
     bool include_graph_events = false;
     frontend_resources::ProfilingLoggingStatus profiling_logging;
-};
+}; 
 
 } // namespace megamol::frontend

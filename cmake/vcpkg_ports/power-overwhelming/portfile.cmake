@@ -3,8 +3,8 @@ vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO UniStuttgart-VISUS/power-overwhelming
-    REF v1.3.0
-    SHA512 cd235ed14f51ccfe45c6d7e5f7da57039fd4ab1b73641261bf6a5fcca640c32f59ca22ad5e140324635fa7ac3b659505cb49dd33a26afe4bcf275489856e272a
+    REF "v${VERSION}"
+    SHA512 6e7d7d0057a477b62cc3c038d7707d230f48233e0ce68c479eefc1acf7893b57be8850492b362102008c670250f35f350b1a4780a176db258181cb7ba37ea0b7
     HEAD_REF master
 )
 
@@ -22,6 +22,8 @@ vcpkg_cmake_config_fixup(
     PACKAGE_NAME power_overwhelming
     CONFIG_PATH lib/cmake/power_overwhelming
 )
+
+vcpkg_copy_pdbs()
 
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENCE")

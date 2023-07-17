@@ -2,9 +2,9 @@ GENERAL_TEST_CASE_NAME = "infovis"
 PER_CASE_DURATION = 5 -- seconds
 
 DATASETS = {
-	[=[E:/B.Sc.Arbeit/daten/iris.mmft]=],
-	[=[E:/B.Sc.Arbeit/daten/Balken.mmft]=],
-	[=[E:/B.Sc.Arbeit/daten/Drops.mmft]=]
+	[=[T:/schmidtm/daten/iris.mmft]=],
+	[=[T:/schmidtm/daten/Balken.mmft]=],
+	[=[T:/schmidtm/daten/Drops.mmft]=]
 }
 RESOLUTIONS = {480, 720, 1080, 1440, 2160}
 
@@ -60,7 +60,7 @@ mmCreateCall("FlagCallWrite_GL","::TableHistogramRenderer2D_1::writeFlagStorage"
 mmSetParamValue("::SplitViewGL_2::split.orientation",[=[Vertical]=])
 
 -- Additional config
---mmSetGuiVisible(true)
+mmSetGUIVisible(false)
 
 -- Setup file for timestamps
 timestamp_header = "Sensor Name,Sample Timestamp (ms),Momentary Power Comsumption (W)\n"
@@ -90,8 +90,8 @@ for _, dataset_path in ipairs(DATASETS) do
 		test_case_name = GENERAL_TEST_CASE_NAME .. "_" .. dataset_name .. "_" .. height .. "p"
 		
 		-- Optionally store a screenshot of the view (or window)
-		--mmScreenshotEntryPoint( "::SplitViewGL_1", test_case_name .. ".png")
-		--mmScreenshot(test_case_name .. ".png")
+		mmScreenshotEntryPoint( "::SplitViewGL_1", test_case_name .. ".png")
+		mmScreenshot(test_case_name .. ".png")
 		
 		-- Render a few dummy frames as warmup
 		for i = 1, 10 do

@@ -2,7 +2,7 @@ GENERAL_TEST_CASE_NAME = "glsl_spheres"
 PER_CASE_DURATION = 5 -- seconds
 
 DATASETS = {
-	[=[E:/B.Sc.Arbeit/daten/expl30m_bin_fix_a-90.mmpld]=]
+	[=[T:/schmidtm/daten/expl30m_bin_fix_a-90.mmpld]=]
 }
 RESOLUTIONS = {480, 720, 1080, 1440, 2160}
 CAMERA_ANGLE_COUNT = 5
@@ -40,18 +40,11 @@ mmSetGUIState([=[{"GraphStates":{"Project":{"Modules":{"::bbox":{"graph_position
 mmRenderNextFrame()
 
 -- Additional config
---mmSetGuiVisible(true)
+mmSetGUIVisible(false)
 
 -- Setup file for timestamps
 timestamp_header = "Sensor Name,Sample Timestamp (ms),Momentary Power Comsumption (W)\n"
 timestamp_file = timestamp_header
-
--- generate camera angles
-camera_angles = splitString(mmGenerateCameraScenes("::view", "orbit", 5), "}")
-for i = 1,CAMERA_ANGLE_COUNT do
-	camera_angles[i] = string.sub(camera_angles[i], 2)
-	camera_angles[i] = camera_angles[i] .. "}"
-end
 
 -- Loop over dataset parameters
 for _, dataset_path in ipairs(DATASETS) do
@@ -70,6 +63,13 @@ for _, dataset_path in ipairs(DATASETS) do
 		-- View reset to center screen after resolution change
 		mmSetParamValue("::view::view::resetView", [=[true]=])
 		mmRenderNextFrame()
+
+		-- generate camera angles
+		camera_angles = splitString(mmGenerateCameraScenes("::view", "orbit", 5), "}")
+		for i = 1,CAMERA_ANGLE_COUNT do
+			camera_angles[i] = string.sub(camera_angles[i], 2)
+			camera_angles[i] = camera_angles[i] .. "}"
+		end
 		
 		-- Loop for different camera angles
 		for i=1,CAMERA_ANGLE_COUNT do
@@ -85,8 +85,8 @@ for _, dataset_path in ipairs(DATASETS) do
 			mmRenderNextFrame()
 			
 			-- Optionally store a screenshot of the view (or window)
-			--mmScreenshotEntryPoint( "::view", test_case_name .. ".png")
-			--mmScreenshot(test_case_name .. ".png")
+			mmScreenshotEntryPoint( "::view", test_case_name .. ".png")
+			mmScreenshot(test_case_name .. ".png")
 			
 			-- Render a few dummy frames as warmup
 			for i = 1, 10 do
