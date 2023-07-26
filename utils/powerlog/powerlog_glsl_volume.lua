@@ -16,10 +16,13 @@ function splitString(input_string, separator)
 end
 
 function render(seconds) 
+	local frame_counter = 0
     local wake_up_time = tonumber(os.clock() + seconds); 
     while (os.clock() < wake_up_time) do 
 		mmRenderNextFrame()
-    end 
+		frame_counter = frame_counter + 1
+	end 
+	return frame_counter
 end
 
 mmCheckVersion("9a28163a595e88b4-dirty") 
@@ -483,7 +486,7 @@ mmSetGUIState([=[{"ConfiguratorState":{"module_list_sidebar_width":250.0,"show_m
 mmSetGUIVisible(false)
 
 -- Setup file for timestamps
-timestamp_header = "Sensor Name,Sample Timestamp (ms),Momentary Power Comsumption (W)\n"
+timestamp_header = "Sensor Name,Sample Timestamp (ms),Num. Frames Rendered\n"
 timestamp_file = timestamp_header
 
 
@@ -527,8 +530,8 @@ for _, dataset_path in ipairs(DATASETS) do
 			mmRenderNextFrame()
 			
 			-- Optionally store a screenshot of the view (or window)
-			mmScreenshotEntryPoint( "::RaycastVolumeExample::View3DGL1", test_case_name .. ".png")
-			mmScreenshot(test_case_name .. ".png")
+			--mmScreenshotEntryPoint( "::RaycastVolumeExample::View3DGL1", test_case_name .. ".png")
+			--mmScreenshot(test_case_name .. ".png")
 			
 			-- Render a few dummy frames as warmup
 			for i = 1, 10 do
@@ -536,15 +539,17 @@ for _, dataset_path in ipairs(DATASETS) do
 			end
 			
 			-- Discard as many in-between-samples as possible
-			mmSwapPowerlogBuffers()
+			--mmSwapPowerlogBuffers()
 			
 			-- Run bechmark and store start/end timestamps (power logging happens within megamol)
 			timestamp_file = timestamp_file .. test_case_name .. "|" .. "start" .. "," .. mmGetPowerTimeStamp() .. ",\n"
-			render(PER_CASE_DURATION)
-			timestamp_file = timestamp_file .. test_case_name .. "|" .. "end" .. "," .. mmGetPowerTimeStamp() .. ",\n"
+			num_frames_rendered = render(PER_CASE_DURATION)
+			timestamp_file = timestamp_file .. test_case_name .. "|" .. "end" .. "," .. mmGetPowerTimeStamp() .. "," .. num_frames_rendered .. "\n"
 			
 			-- Flush sample buffer into powerlog file
 			mmFlushPowerlog()
+			
+			print(num_frames_rendered .. " frames rendered")
 
 		end
 	end
@@ -559,7 +564,7 @@ angle_file = angle_header
 for i = 1,CAMERA_ANGLE_COUNT do
 	angle_file = angle_file .. "cam" .. i .. ";" .. camera_angles[i] .. "\n"
 end
-mmWriteTextFile(mmGetInstanceName() .. "-" .. GENERAL_TEST_CASE_NAME .. "_" .. "camera_angles" .. "_" .. ".csv", angle_file)
+mmWriteTextFile(mmGetInstanceName() .. "-" .. GENERAL_TEST_CASE_NAME .. "_" .. "camera_angles" .. ".csv", angle_file)
 
 -- Quit
 mmQuit()

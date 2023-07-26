@@ -1,15 +1,18 @@
 from os import listdir
 from os.path import isdir, join
 from csv import reader as csv_reader
+from statistics import mean, median, stdev
+
 from matplotlib import pyplot
 from xlsxwriter import Workbook
 
 GENERATE_RAW_FILE: bool = False
-GENERATE_RAW_GRAPHS: bool = True
-GENERATE_COMBINED_FILE: bool = True
-QUANTIZATION_STEP: int = 5  # ms
+GENERATE_RAW_GRAPHS: bool = False
+GENERATE_COMBINED_FILE: bool = False
+GENERATE_TABLES_FILE: bool = True
+QUANTIZATION_STEP: int = 1  # ms
 
-INPUT_DIR: str = r"E:\B.Sc.Arbeit\Messungen\14.07.2023"
+INPUT_DIR: str = r"E:\B.Sc.Arbeit\Messungen\20.07.2023"
 OUTPUT_DIR: str = INPUT_DIR
 OUTPUT_FILE_NAME_BASE: str = INPUT_DIR.split('\\')[-1]
 
@@ -32,16 +35,44 @@ RENAME_DICT: dict[str, str] = {
     "Tinkerforge/localhost:4223/UeW": "PCIe 6"
 }
 
+TABLE_CATEGORIES: list[str] = [
+    "Test Setup",
+    "Test Case",
+    "Test Data",
+    "Resolution",
+    "Camera Angle",
+    "Num. Frames Rendered",
+    "Avg. FPS"
+]
+
+RELEVANT_POWER_SOURCES: list[str] = [
+    "System without GPU", "GPU", "NVML/ADL"
+]
+
 TEST_CASE_FORMAT_JSON: dict = {"align": "left"}
 TIMESTAMP_FORMAT_JSON: dict = {"num_format": "############", "align": "center"}
 POWER_FORMAT_JSON: dict = {"num_format": "###,###0.000", "align": "center"}
 
+
+class TestCaseMetaData:
+    def __init__(self, full_name: str, num_frames_rendered: int):
+        self.full_name: str = full_name
+        split_info = full_name.split('|')
+        self.test_case_type: str = split_info[0]
+        self.test_data: str = split_info[1]
+        self.resolution: int = int(split_info[2][:-1])
+        self.cam_angle: str = split_info[3]
+        self.num_frames_rendered: int = num_frames_rendered
+
+
 if __name__ == '__main__':
+
+    table_rows: list[list[str]] = []
 
     # setup .xlsx file(s)
     raw_workbook = Workbook(join(OUTPUT_DIR, OUTPUT_FILE_NAME_BASE + "-raw.xlsx"))
-
     combined_workbook = Workbook(join(OUTPUT_DIR, OUTPUT_FILE_NAME_BASE + "-combined_power.xlsx"))
+    tables_workbook = Workbook(join(OUTPUT_DIR, OUTPUT_FILE_NAME_BASE + "-tables.xlsx"))
 
     # detect all subdirectories (ideally each corresponding to one GPU or similar "hard-to-modify" factor)
     test_setups: list[str] = [directory for directory in listdir(INPUT_DIR) if isdir(join(INPUT_DIR, directory))]
@@ -72,10 +103,11 @@ if __name__ == '__main__':
             # read/parse contents of all detected files
             sensor_data: dict[str, tuple[list[int], list[float]]] = {}  # k: sensor name, v: tuple of (timestamp, power)
             marker_data: dict[str, tuple[int, int]] = {}  # key: test case name, value: (start timestamp, end timestamp)
+            test_case_data: dict[str, TestCaseMetaData] = {}  # key: test case name, value: TestCaseMetaData
 
             for file in powerlog_files:
                 with open(join(INPUT_DIR, test_setup, file), 'r') as powerlog_csv_file:
-                    reader = csv_reader(powerlog_csv_file)
+                    reader = csv_reader(powerlog_csv_file, delimiter=',')
                     data_tuples: tuple[list[int], list[float]] = ([], [])
 
                     for row in reader:
@@ -86,7 +118,7 @@ if __name__ == '__main__':
                             data_tuples[1].append(float(row[2]))
                         except (IndexError, ValueError) as e:
                             if not row[1] == "Sample Timestamp (ms)":  # rule out first line
-                                print(str(type(e))[8:-2] + "! File \"" + file + "\" is invalid:")
+                                print(str(type(e))[8:-2] + "! File \"" + join(INPUT_DIR, test_setup, file) + "\" is invalid:")
                                 print(e)
 
                     if len(data_tuples[0]) < 2:  # filter out unused sensors STEP 2
@@ -102,17 +134,18 @@ if __name__ == '__main__':
                         sensor_data[row[0]] = data_tuples
 
             with open(join(INPUT_DIR, test_setup, marker_file), 'r') as marker_csv_file:
-                reader = csv_reader(marker_csv_file)
+                reader = csv_reader(marker_csv_file, delimiter=',')
                 for row in reader:
                     try:
                         split_row = row[0].split('|')
-                        if split_row[1] == "start":  # case: test case start
-                            marker_data[split_row[0]] = (int(row[1]), 0)
-                        elif split_row[1] == "end":  # case: test case end
-                            marker_data[split_row[0]] = (marker_data[split_row[0]][0], int(row[1]))
+                        if split_row[-1] == "start":  # case: test case start
+                            marker_data[row[0][:-6]] = (int(row[1]), 0)
+                        elif split_row[-1] == "end":  # case: test case end
+                            marker_data[row[0][:-4]] = (marker_data[row[0][:-4]][0], int(row[1]))
+                            test_case_data[row[0][:-4]] = TestCaseMetaData(row[0][:-4], int(row[2]))
                     except (KeyError, IndexError, ValueError) as e:
                         if not row[1] == "Sample Timestamp (ms)":  # rule out first line
-                            print(str(type(e))[8:-2] + "! File \"" + marker_file + "\" is invalid:")
+                            print(str(type(e))[8:-2] + "! File \"" + join(INPUT_DIR, test_setup, marker_file) + "\" is invalid:")
                             print(e)
 
             # determine timestamp range for this test case
@@ -210,6 +243,12 @@ if __name__ == '__main__':
                 sensor_data["System without GPU"][0].append(quantization_range[i])
                 sensor_data["System without GPU"][1].append(system_combined_power)
 
+            columns: list[str] = ["System without GPU", "GPU"]
+            if "ADL" in sensor_data:  # potentially wrong, no successful ADL examples yet, TODO: verify / correct
+                columns.append("ADL")
+            if "NVML" in sensor_data:
+                columns.append("NVML")
+
             if GENERATE_COMBINED_FILE:
                 # export combined power data to .xlsx
                 test_case_format = combined_workbook.add_format(TEST_CASE_FORMAT_JSON)
@@ -224,12 +263,6 @@ if __name__ == '__main__':
 
                 combined_worksheet.write(0, 0, "Test Case")
                 combined_worksheet.write(0, 1, "Timestamp (ms)")
-
-                columns: list[str] = ["System without GPU", "GPU"]
-                if "ADL" in sensor_data:  # potentially wrong, no successful ADL examples yet, TODO: verify / correct
-                    columns.append("ADL")
-                if "NVML" in sensor_data:
-                    columns.append("NVML")
 
                 for col in range(len(columns)):
                     combined_worksheet.write(0, col + 2, columns[col] + " (W)")
@@ -264,15 +297,77 @@ if __name__ == '__main__':
                         "max": sensor_data["GPU"][0][len(sensor_data["GPU"][0]) - 1],
                     })
                     combined_raw_chart.set_size({"width": 1280, "height": 800})
-                    combined_raw_chart.set_title({"name": (test_setup + ' - ' + marker_file[12:-4])[0:31]})
+                    combined_raw_chart.set_title({"name": (test_setup + ' - ' + marker_file[12:-4])})
                     combined_raw_chart.set_legend({"position": "bottom"})
 
                 combined_worksheet.insert_chart("G2", combined_raw_chart)
 
-                # TODO: extract statistic values and generate pivot tables for each test case
+            if GENERATE_TABLES_FILE:
+                for test_case in test_case_data.keys():
+                    test_case_runtime: float = (marker_data[test_case][1] - marker_data[test_case][0]) / 1000  # ->s
+                    table_row_entries: list = [
+                        test_setup,
+                        test_case_data[test_case].test_case_type,
+                        test_case_data[test_case].test_data,
+                        test_case_data[test_case].resolution,
+                        test_case_data[test_case].cam_angle,
+                        test_case_data[test_case].num_frames_rendered,
+                        test_case_data[test_case].num_frames_rendered / test_case_runtime,
+                    ]
+                    for column in columns:
+                        corresponding_measurements: list[float] = []
+                        for timestamp, power in zip(sensor_data[column][0], sensor_data[column][1]):
+                            if marker_data[test_case][0] < timestamp < marker_data[test_case][1]:
+                                corresponding_measurements.append(power)
+
+                        table_row_entries.append(mean(corresponding_measurements))
+                        table_row_entries.append(median(corresponding_measurements))
+                        table_row_entries.append(min(corresponding_measurements))
+                        table_row_entries.append(max(corresponding_measurements))
+                        table_row_entries.append(stdev(corresponding_measurements))
+
+                        # frames/J and J/frame relative to mean wattage
+                        energy_in_joules: float = table_row_entries[-5]
+                        table_row_entries.append(test_case_data[test_case].num_frames_rendered / energy_in_joules)
+                        table_row_entries.append(energy_in_joules / test_case_data[test_case].num_frames_rendered)
+
+                    table_rows.append(table_row_entries)
 
     if GENERATE_RAW_FILE:
+        print("Writing raw file...")
         raw_workbook.close()
-
     if GENERATE_COMBINED_FILE:
+        print("Writing combined file...")
         combined_workbook.close()
+    if GENERATE_TABLES_FILE:
+        test_case_format_tbl = tables_workbook.add_format(TEST_CASE_FORMAT_JSON)
+        power_format_tbl = tables_workbook.add_format(POWER_FORMAT_JSON)
+
+        tables_worksheet = tables_workbook.add_worksheet(OUTPUT_FILE_NAME_BASE + " full table")
+
+        table_categories_formatted: list[dict[str, str]] = []
+        for table_category in TABLE_CATEGORIES:
+            table_categories_formatted.append({"header": table_category})
+        for power_source in RELEVANT_POWER_SOURCES:
+            table_categories_formatted.append({"header": '(' + power_source + ") Mean (W)"})
+            table_categories_formatted.append({"header": '(' + power_source + ") Median (W)"})
+            table_categories_formatted.append({"header": '(' + power_source + ") Min. (W)"})
+            table_categories_formatted.append({"header": '(' + power_source + ") Max. (W)"})
+            table_categories_formatted.append({"header": '(' + power_source + ") Std. Dev. (W)"})
+            table_categories_formatted.append({"header": '(' + power_source + ") Efficiency (frames/J)"})
+            table_categories_formatted.append({"header": '(' + power_source + ") Efficiency (J/frame)"})
+
+        tables_worksheet.add_table(0, 0, len(table_rows), len(table_categories_formatted) - 1,
+                                   {'columns': table_categories_formatted})
+
+        for i in range(len(table_rows)):
+            for j in range(len(table_rows[i])):
+                if j < 6:  # check if number format should be applied
+                    tables_worksheet.write(i + 1, j, table_rows[i][j], test_case_format_tbl)
+                else:
+                    tables_worksheet.write(i + 1, j, float(table_rows[i][j]), power_format_tbl)
+
+        tables_worksheet.autofit()
+
+        print("Writing tables file...")
+        tables_workbook.close()
