@@ -1,5 +1,8 @@
 #pragma once
+
 #include <array>
+#include <imgui.h>
+
 #include <imgui.h>
 
 struct GenericWindow {

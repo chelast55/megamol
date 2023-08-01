@@ -35,6 +35,7 @@
       "platform": "!windows"
     },
     "libpng",
+    "ltla-umappp",
     "lua",
     "mmpld-io",
     "nanoflann",
@@ -94,6 +95,9 @@
         },
         "mpi"
       ]
+    },
+    "nvperf": {
+      "description": "Use NVPerf Profiling"
     },
     "opengl": {
       "description": "Use OpenGL",
