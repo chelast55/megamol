@@ -1,11 +1,12 @@
-GENERAL_TEST_CASE_NAME = "glsl_spheres"-- .. "_ssbo_static_data"
+GENERAL_TEST_CASE_NAME = "glsl_spheres" .. "_ssbo_static_data"
 PER_CASE_DURATION = 5 -- seconds
 
 DATASETS = {
 	[=[T:/schmidtm/daten/expl30m_bin_fix_a-90.mmpld]=]
 }
 --RESOLUTIONS = {480, 720, 1080, 1440, 2160}
-RESOLUTIONS = {1080}
+RESOLUTIONS = {480}
+--RESOLUTIONS = {1080}
 --RESOLUTIONS = {2160}
 CAMERA_ANGLE_COUNT = 5
 
@@ -45,8 +46,8 @@ mmRenderNextFrame()
 
 -- Additional config
 mmSetGUIVisible(false)
---mmSetParamValue("::renderer::renderMode", "SSBO_Stream")
---mmSetParamValue("::renderer::ssbo::staticData", [=[true]=])
+mmSetParamValue("::renderer::renderMode", "SSBO_Stream")
+mmSetParamValue("::renderer::ssbo::staticData", [=[true]=])
 
 -- Setup file for timestamps
 timestamp_header = "Sensor Name,Sample Timestamp (ms),Num. Frames Rendered\n"

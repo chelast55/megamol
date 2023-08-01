@@ -12,7 +12,7 @@ GENERATE_COMBINED_FILE: bool = False
 GENERATE_TABLES_FILE: bool = True
 QUANTIZATION_STEP: int = 1  # ms
 
-INPUT_DIR: str = r"E:\B.Sc.Arbeit\Messungen\20.07.2023"
+INPUT_DIR: str = r"E:\B.Sc.Arbeit\Messungen\27.07.2023"
 OUTPUT_DIR: str = INPUT_DIR
 OUTPUT_FILE_NAME_BASE: str = INPUT_DIR.split('\\')[-1]
 
@@ -41,6 +41,7 @@ TABLE_CATEGORIES: list[str] = [
     "Test Data",
     "Resolution",
     "Camera Angle",
+    "Volume Size",
     "Num. Frames Rendered",
     "Avg. FPS"
 ]
@@ -62,6 +63,9 @@ class TestCaseMetaData:
         self.test_data: str = split_info[1]
         self.resolution: int = int(split_info[2][:-1])
         self.cam_angle: str = split_info[3]
+        self.volume_size: None = None
+        if "volume_variable" in self.test_case_type:
+            self.volume_size = int(self.test_case_type.split(':')[2])
         self.num_frames_rendered: int = num_frames_rendered
 
 
@@ -305,14 +309,17 @@ if __name__ == '__main__':
             if GENERATE_TABLES_FILE:
                 for test_case in test_case_data.keys():
                     test_case_runtime: float = (marker_data[test_case][1] - marker_data[test_case][0]) / 1000  # ->s
+                    fps: float = test_case_data[test_case].num_frames_rendered / test_case_runtime
+
                     table_row_entries: list = [
                         test_setup,
                         test_case_data[test_case].test_case_type,
                         test_case_data[test_case].test_data,
                         test_case_data[test_case].resolution,
                         test_case_data[test_case].cam_angle,
+                        test_case_data[test_case].volume_size,
                         test_case_data[test_case].num_frames_rendered,
-                        test_case_data[test_case].num_frames_rendered / test_case_runtime,
+                        fps,
                     ]
                     for column in columns:
                         corresponding_measurements: list[float] = []
@@ -320,16 +327,17 @@ if __name__ == '__main__':
                             if marker_data[test_case][0] < timestamp < marker_data[test_case][1]:
                                 corresponding_measurements.append(power)
 
-                        table_row_entries.append(mean(corresponding_measurements))
+                        mean_wattage: float = mean(corresponding_measurements)
+
+                        table_row_entries.append(mean_wattage)
                         table_row_entries.append(median(corresponding_measurements))
                         table_row_entries.append(min(corresponding_measurements))
                         table_row_entries.append(max(corresponding_measurements))
                         table_row_entries.append(stdev(corresponding_measurements))
 
                         # frames/J and J/frame relative to mean wattage
-                        energy_in_joules: float = table_row_entries[-5]
-                        table_row_entries.append(test_case_data[test_case].num_frames_rendered / energy_in_joules)
-                        table_row_entries.append(energy_in_joules / test_case_data[test_case].num_frames_rendered)
+                        table_row_entries.append(fps * (1 / mean_wattage))
+                        table_row_entries.append(mean_wattage * (1 / fps))
 
                     table_rows.append(table_row_entries)
 

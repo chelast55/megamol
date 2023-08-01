@@ -1,13 +1,24 @@
-GENERAL_TEST_CASE_NAME = "glsl_volume"
+GENERAL_TEST_CASE_NAME = "glsl_volume_variable"
 PER_CASE_DURATION = 5 -- seconds
 
 DATASETS = {
 	[=[T:/schmidtm/daten/expl30m_bin_fix_a-90.mmpld]=]
 }
---RESOLUTIONS = {480, 720, 1080, 1440, 2160}
+RESOLUTIONS = {480, 720, 1080, 1440, 2160}
+--RESOLUTIONS = {480}
 --RESOLUTIONS = {1080}
 --RESOLUTIONS = {2160}
 CAMERA_ANGLE_COUNT = 5
+VOLUME_DIMENSIONS = {
+    {64, 256, 64},
+    {64, 256, 128},
+    {64, 512, 128},
+    {128, 512, 128},
+    {128, 512, 256},
+    {128, 1024, 256},
+    {256, 1024, 256},
+    {256, 1024, 512}
+}
 
 function splitString(input_string, separator)
 	local split_string = {}
@@ -477,9 +488,6 @@ mmSetParamValue("::RaycastVolumeExample::TransferFunction1::TransferFunction",[=
 }]=])
 mmSetParamValue("::RaycastVolumeExample::ScreenShooter1::view",[=[::RaycastVolumeExample::View3DGL1]=])
 mmSetParamValue("::RaycastVolumeExample::ScreenShooter1::filename",[=[RaycastVolumeRenderer.png]=])
-mmSetParamValue("::RaycastVolumeExample::ParticlesToDensity_1::sizex",[=[256]=])
-mmSetParamValue("::RaycastVolumeExample::ParticlesToDensity_1::sizey",[=[1024]=])
-mmSetParamValue("::RaycastVolumeExample::ParticlesToDensity_1::sizez",[=[256]=])
 
 mmSetGUIState([=[{"ConfiguratorState":{"module_list_sidebar_width":250.0,"show_module_list_sidebar":false},"GUIState":{"font_file_name":"Roboto-Regular.ttf","font_size":12.0,"global_win_background_alpha":1.0,"imgui_settings":"[Window][Configurator     F11]\nPos=481,18\nSize=1439,1062\nCollapsed=0\nDockId=0x00000004,0\n\n[Window][Parameters     F10]\nPos=0,18\nSize=479,1062\nCollapsed=0\nDockId=0x00000003,0\n\n[Window][Log Console     F9]\nCollapsed=0\nDockId=0x00000002\n\n[Window][DockSpaceViewport_11111111]\nPos=0,18\nSize=1920,1062\nCollapsed=0\n\n[Window][Debug##Default]\nPos=60,60\nSize=400,400\nCollapsed=0\n\n[Window][###fbw148]\nPos=760,290\nSize=400,500\nCollapsed=0\n\n[Window][###fbw24958]\nPos=760,290\nSize=400,500\nCollapsed=0\n\n[Window][###fbw27768]\nPos=760,290\nSize=400,500\nCollapsed=0\n\n[Window][###fbw24847]\nPos=760,290\nSize=400,500\nCollapsed=0\n\n[Docking][Data]\nDockSpace     ID=0x8B93E3BD Window=0xA787BDB4 Pos=0,18 Size=1920,1062 Split=Y\n  DockNode    ID=0x00000001 Parent=0x8B93E3BD SizeRef=1920,808 Split=X\n    DockNode  ID=0x00000003 Parent=0x00000001 SizeRef=479,808 Selected=0x75D4D3D8\n    DockNode  ID=0x00000004 Parent=0x00000001 SizeRef=1439,808 CentralNode=1 Selected=0xAE7400BF\n  DockNode    ID=0x00000002 Parent=0x8B93E3BD SizeRef=1920,270\n\n","menu_visible":true,"style":2},"GraphStates":{"Project":{"Modules":{"::RaycastVolumeExample::BoundingBoxRenderer1":{"graph_position":[332.0,112.0]},"::RaycastVolumeExample::MMPLDDataSource_1":{"graph_position":[1097.0,113.0]},"::RaycastVolumeExample::ParticlesToDensity_1":{"graph_position":[853.0,89.0]},"::RaycastVolumeExample::RaycastVolumeRenderer1":{"graph_position":[603.0,112.0]},"::RaycastVolumeExample::ScreenShooter1":{"graph_position":[96.0,216.0]},"::RaycastVolumeExample::TransferFunction1":{"graph_position":[933.0,208.0]},"::RaycastVolumeExample::View3DGL1":{"graph_position":[96.0,112.0]}},"call_coloring_map":0,"call_coloring_mode":0,"canvas_scrolling":[0.0,0.0],"canvas_zooming":1.0,"param_extended_mode":false,"parameter_sidebar_width":300.0,"profiling_bar_height":300.0,"project_name":"Project_2","show_call_label":true,"show_call_slots_label":false,"show_grid":false,"show_module_label":true,"show_parameter_sidebar":false,"show_profiling_bar":false,"show_slot_label":false}},"ParameterStates":{"::RaycastVolumeExample::BoundingBoxRenderer1::boundingBoxColor":{"gui_presentation_mode":8,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::BoundingBoxRenderer1::enableBoundingBox":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::BoundingBoxRenderer1::enableViewCube":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::BoundingBoxRenderer1::smoothLines":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::BoundingBoxRenderer1::viewCubePosition":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::BoundingBoxRenderer1::viewCubeSize":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::MMPLDDataSource_1::filename":{"gui_presentation_mode":16,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::MMPLDDataSource_1::limitMemory":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::MMPLDDataSource_1::limitMemorySize":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::MMPLDDataSource_1::overrideLocalBBox":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ParticlesToDensity_1::aggregator":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ParticlesToDensity_1::cyclX":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ParticlesToDensity_1::cyclY":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ParticlesToDensity_1::cyclZ":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ParticlesToDensity_1::forSurfaceReconstruction":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ParticlesToDensity_1::normalize":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ParticlesToDensity_1::sigma":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ParticlesToDensity_1::sizex":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ParticlesToDensity_1::sizey":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ParticlesToDensity_1::sizez":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::RaycastVolumeRenderer1::isovalue":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":false},"::RaycastVolumeExample::RaycastVolumeRenderer1::lighting::ambient color":{"gui_presentation_mode":8,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::RaycastVolumeRenderer1::lighting::ka":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::RaycastVolumeRenderer1::lighting::kd":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::RaycastVolumeRenderer1::lighting::ks":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::RaycastVolumeRenderer1::lighting::material color":{"gui_presentation_mode":8,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::RaycastVolumeRenderer1::lighting::shininess":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::RaycastVolumeRenderer1::lighting::specular color":{"gui_presentation_mode":8,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::RaycastVolumeRenderer1::lighting::use lighting":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::RaycastVolumeRenderer1::mode":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::RaycastVolumeRenderer1::opacity":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":false},"::RaycastVolumeExample::RaycastVolumeRenderer1::opacity threshold":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::RaycastVolumeRenderer1::ray step ratio":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::anim::addTime2Fname":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::anim::from":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::anim::makeAnim":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::anim::paramname":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::anim::step":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::anim::to":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::background":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::closeAfter":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":false},"::RaycastVolumeExample::ScreenShooter1::disableCompressionSlot":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::filename":{"gui_presentation_mode":16,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::imgHeight":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::imgWidth":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::tileHeight":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":false},"::RaycastVolumeExample::ScreenShooter1::tileWidth":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":false},"::RaycastVolumeExample::ScreenShooter1::trigger":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::ScreenShooter1::view":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::TransferFunction1::TransferFunction":{"gui_presentation_mode":32,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::ParameterGroup::anim":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::ParameterGroup::view":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::anim::SpeedDown":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::anim::SpeedUp":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::anim::play":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::anim::speed":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::anim::time":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::anim::togglePlay":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::backCol":{"gui_presentation_mode":8,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::cam::farplane":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::cam::halfaperturedegrees":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::cam::nearplane":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::cam::orientation":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::cam::position":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::cam::projectiontype":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::camstore::autoLoadSettings":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::camstore::autoSaveSettings":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::camstore::overrideSettings":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::camstore::restorecam":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::camstore::settings":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::camstore::storecam":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::resetViewOnBBoxChange":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::showLookAt":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::view::cubeOrientation":{"gui_presentation_mode":2,"gui_read-only":true,"gui_visibility":false},"::RaycastVolumeExample::View3DGL1::view::defaultOrientation":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::view::defaultView":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::view::resetView":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::view::showViewCube":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::viewKey::AngleStep":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::viewKey::FixToWorldUp":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::viewKey::MouseSensitivity":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::viewKey::MoveStep":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::viewKey::RotPoint":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true},"::RaycastVolumeExample::View3DGL1::viewKey::RunFactor":{"gui_presentation_mode":2,"gui_read-only":false,"gui_visibility":true}},"WindowConfigurations":{"Configurator":{"win_callback":6,"win_collapsed":false,"win_flags":1032,"win_hotkey":[300,0],"win_position":[481.0,18.0],"win_reset_position":[0.0,0.0],"win_reset_size":[750.0,500.0],"win_show":true,"win_size":[1439.0,1062.0]},"Hotkey Editor":{"hotkey_list":[[{"key":293,"mods":4,"name":"_hotkey_gui_exit","parent":"","parent_type":2}],[{"key":83,"mods":2,"name":"_hotkey_gui_save_project","parent":"","parent_type":2}],[{"key":76,"mods":2,"name":"_hotkey_gui_load_project","parent":"","parent_type":2}],[{"key":301,"mods":0,"name":"_hotkey_gui_menu","parent":"","parent_type":2}],[{"key":292,"mods":0,"name":"_hotkey_gui_toggle_graph_entry","parent":"","parent_type":2}],[{"key":291,"mods":0,"name":"_hotkey_gui_trigger_screenshot","parent":"","parent_type":2}],[{"key":71,"mods":2,"name":"_hotkey_gui_show-hide","parent":"","parent_type":2}],[{"key":300,"mods":0,"name":"_hotkey_gui_window_Configurator","parent":"17030246060415721360","parent_type":3}],[{"key":77,"mods":3,"name":"_hotkey_gui_configurator_module_search","parent":"","parent_type":4}],[{"key":80,"mods":3,"name":"_hotkey_gui_configurator_param_search","parent":"","parent_type":4}],[{"key":261,"mods":0,"name":"_hotkey_gui_configurator_delete_graph_entry","parent":"","parent_type":4}],[{"key":83,"mods":3,"name":"_hotkey_gui_configurator_save_project","parent":"","parent_type":4}],[{"key":299,"mods":0,"name":"_hotkey_gui_window_Parameters","parent":"2021973547876601465","parent_type":3}],[{"key":80,"mods":2,"name":"_hotkey_gui_parameterlist_param_search","parent":"","parent_type":4}],[{"key":298,"mods":0,"name":"_hotkey_gui_window_Log Console","parent":"3923344468212134616","parent_type":3}],[{"key":297,"mods":0,"name":"_hotkey_gui_window_Transfer Function Editor","parent":"6166565350214160899","parent_type":3}],[{"key":296,"mods":0,"name":"_hotkey_gui_window_Performance Metrics","parent":"4920642770320252208","parent_type":3}],[{"key":295,"mods":0,"name":"_hotkey_gui_window_Hotkey Editor","parent":"529232018636216348","parent_type":3}],[{"key":67,"mods":5,"name":"::RaycastVolumeExample::View3DGL1_camstore::storecam","parent":"::::RaycastVolumeExample::View3DGL1::camstore::storecam","parent_type":1}],[{"key":67,"mods":4,"name":"::RaycastVolumeExample::View3DGL1_camstore::restorecam","parent":"::::RaycastVolumeExample::View3DGL1::camstore::restorecam","parent_type":1}],[{"key":268,"mods":0,"name":"::RaycastVolumeExample::View3DGL1_view::resetView","parent":"::::RaycastVolumeExample::View3DGL1::view::resetView","parent_type":1}],[{"key":32,"mods":0,"name":"::RaycastVolumeExample::View3DGL1_anim::togglePlay","parent":"::::RaycastVolumeExample::View3DGL1::anim::togglePlay","parent_type":1}],[{"key":77,"mods":0,"name":"::RaycastVolumeExample::View3DGL1_anim::SpeedUp","parent":"::::RaycastVolumeExample::View3DGL1::anim::SpeedUp","parent_type":1}],[{"key":78,"mods":0,"name":"::RaycastVolumeExample::View3DGL1_anim::SpeedDown","parent":"::::RaycastVolumeExample::View3DGL1::anim::SpeedDown","parent_type":1}],[{"key":83,"mods":4,"name":"::RaycastVolumeExample::ScreenShooter1_trigger","parent":"::::RaycastVolumeExample::ScreenShooter1::trigger","parent_type":1}]],"win_callback":4,"win_collapsed":false,"win_flags":0,"win_hotkey":[295,0],"win_position":[0.0,0.0],"win_reset_position":[0.0,0.0],"win_reset_size":[0.0,0.0],"win_show":false,"win_size":[0.0,0.0]},"Log Console":{"log_force_open":true,"log_level":100,"win_callback":7,"win_collapsed":false,"win_flags":3072,"win_hotkey":[298,0],"win_position":[0.0,0.0],"win_reset_position":[0.0,0.0],"win_reset_size":[500.0,50.0],"win_show":false,"win_size":[500.0,50.0]},"Parameters":{"param_extended_mode":false,"param_modules_list":[],"win_callback":1,"win_collapsed":false,"win_flags":8,"win_hotkey":[299,0],"win_position":[0.0,18.0],"win_reset_position":[0.0,0.0],"win_reset_size":[400.0,500.0],"win_show":true,"win_size":[479.0,1062.0]},"Performance Metrics":{"fpsms_max_value_count":20,"fpsms_mode":0,"fpsms_refresh_rate":2.0,"fpsms_show_options":false,"win_callback":3,"win_collapsed":false,"win_flags":2097217,"win_hotkey":[296,0],"win_position":[0.0,0.0],"win_reset_position":[0.0,0.0],"win_reset_size":[0.0,0.0],"win_show":false,"win_size":[0.0,0.0]},"Transfer Function Editor":{"tfe_active_param":"","tfe_view_minimized":false,"tfe_view_vertical":false,"win_callback":5,"win_collapsed":false,"win_flags":64,"win_hotkey":[297,0],"win_position":[0.0,0.0],"win_reset_position":[0.0,0.0],"win_reset_size":[0.0,0.0],"win_show":false,"win_size":[0.0,0.0]}}}]=])
 
@@ -491,70 +499,79 @@ mmSetGUIVisible(false)
 timestamp_header = "Sensor Name,Sample Timestamp (ms),Num. Frames Rendered\n"
 timestamp_file = timestamp_header
 
+    
+-- Loop over volume sizes
+for _, volume_dimension in ipairs(VOLUME_DIMENSIONS) do
+    mmSetParamValue("::RaycastVolumeExample::ParticlesToDensity_1::sizex",volume_dimension[1])
+    mmSetParamValue("::RaycastVolumeExample::ParticlesToDensity_1::sizey",volume_dimension[2])
+    mmSetParamValue("::RaycastVolumeExample::ParticlesToDensity_1::sizez",volume_dimension[3])
+    
+    -- Loop over dataset parameters
+    for _, dataset_path in ipairs(DATASETS) do
+        mmSetParamValue("::RaycastVolumeExample::MMPLDDataSource_1::filename", dataset_path)
+        mmRenderNextFrame()
 
+        -- Loop over resolution parameter
+        for _, height in ipairs(RESOLUTIONS) do
 
--- Loop over dataset parameters
-for _, dataset_path in ipairs(DATASETS) do
-	mmSetParamValue("::RaycastVolumeExample::MMPLDDataSource_1::filename", dataset_path)
-	mmRenderNextFrame()
+            -- Set resolution to view framebuffer and window
+            width = math.ceil(height * (16/9))
+            mmSetViewFramebufferSize("::RaycastVolumeExample::View3DGL1", width, height)
+            mmSetWindowFramebufferSize(width, height)
+            mmRenderNextFrame() -- Always render a dummy frame to apply changes
+            
+            -- View reset to center screen after resolution change
+            mmSetParamValue("::RaycastVolumeExample::View3DGL1::view::resetView", [=[true]=])
+            mmRenderNextFrame()
 
-	-- Loop over resolution parameter
-	for _, height in ipairs(RESOLUTIONS) do
+            -- generate camera angles
+            camera_angles = splitString(mmGenerateCameraScenes("::RaycastVolumeExample::View3DGL1", "orbit", 5), "}")
+            for i = 1,CAMERA_ANGLE_COUNT do
+                camera_angles[i] = string.sub(camera_angles[i], 2)
+                camera_angles[i] = camera_angles[i] .. "}"
+            end
+            
+            -- Loop for different camera angles
+            for i=1,CAMERA_ANGLE_COUNT do
+            
+                -- create a unique filename for the current parameter set
+                split_path = splitString(dataset_path, "/")
+                dataset_name = splitString(split_path[#split_path], ".")[1]
+                volume_dimensions_string = volume_dimension[1] .. "x" .. volume_dimension[2] .. "x" .. volume_dimension[3]
+                volume_size = volume_dimension[1] * volume_dimension[2] * volume_dimension[3]
+                test_case_name = GENERAL_TEST_CASE_NAME .. ":"  .. volume_dimensions_string .. ":" .. volume_size .. "|" .. dataset_name .. "|" .. height .. "p" .. "|" .. "cam" .. i
+                
+                -- set camera angle
+                mmSetParamValue("::RaycastVolumeExample::View3DGL1::camstore::settings", camera_angles[i])
+                mmSetParamValue(":::RaycastVolumeExample::View3DGL1::camstore::restorecam", [=[true]=])
+                mmRenderNextFrame()
+                
+                -- Optionally store a screenshot of the view (or window)
+                test_case_file_viable = test_case_name:gsub(":", "_"):gsub("|", "_")
+                --mmScreenshotEntryPoint( "::RaycastVolumeExample::View3DGL1", test_case_file_viable .. ".png")
+                --mmScreenshot(test_case_file_viable .. ".png")
+                
+                -- Render a few dummy frames as warmup
+                for i = 1, 10 do
+                mmRenderNextFrame()
+                end
+                
+                -- Discard as many in-between-samples as possible
+                --mmSwapPowerlogBuffers()
+                
+                -- Run bechmark and store start/end timestamps (power logging happens within megamol)
+                timestamp_file = timestamp_file .. test_case_name .. "|" .. "start" .. "," .. mmGetPowerTimeStamp() .. ",\n"
+                num_frames_rendered = render(PER_CASE_DURATION)
+                timestamp_file = timestamp_file .. test_case_name .. "|" .. "end" .. "," .. mmGetPowerTimeStamp() .. "," .. num_frames_rendered .. "\n"
+                
+                -- Flush sample buffer into powerlog file
+                mmFlushPowerlog()
+                
+                print(num_frames_rendered .. " frames rendered")
 
-		-- Set resolution to view framebuffer and window
-		width = math.ceil(height * (16/9))
-		mmSetViewFramebufferSize("::RaycastVolumeExample::View3DGL1", width, height)
-		mmSetWindowFramebufferSize(width, height)
-		mmRenderNextFrame() -- Always render a dummy frame to apply changes
-		  
-		-- View reset to center screen after resolution change
-		mmSetParamValue("::RaycastVolumeExample::View3DGL1::view::resetView", [=[true]=])
-		mmRenderNextFrame()
-
-		-- generate camera angles
-		camera_angles = splitString(mmGenerateCameraScenes("::RaycastVolumeExample::View3DGL1", "orbit", 5), "}")
-		for i = 1,CAMERA_ANGLE_COUNT do
-			camera_angles[i] = string.sub(camera_angles[i], 2)
-			camera_angles[i] = camera_angles[i] .. "}"
-		end
-		
-		-- Loop for different camera angles
-		for i=1,CAMERA_ANGLE_COUNT do
-		
-			-- create a unique filename for the current parameter set
-			split_path = splitString(dataset_path, "/")
-			dataset_name = splitString(split_path[#split_path], ".")[1]
-			test_case_name = GENERAL_TEST_CASE_NAME .. "|" .. dataset_name .. "|" .. height .. "p" .. "|" .. "cam" .. i
-			
-			-- set camera angle
-			mmSetParamValue("::RaycastVolumeExample::View3DGL1::camstore::settings", camera_angles[i])
-			mmSetParamValue(":::RaycastVolumeExample::View3DGL1::camstore::restorecam", [=[true]=])
-			mmRenderNextFrame()
-			
-			-- Optionally store a screenshot of the view (or window)
-			--mmScreenshotEntryPoint( "::RaycastVolumeExample::View3DGL1", test_case_name .. ".png")
-			--mmScreenshot(test_case_name .. ".png")
-			
-			-- Render a few dummy frames as warmup
-			for i = 1, 10 do
-			  mmRenderNextFrame()
-			end
-			
-			-- Discard as many in-between-samples as possible
-			--mmSwapPowerlogBuffers()
-			
-			-- Run bechmark and store start/end timestamps (power logging happens within megamol)
-			timestamp_file = timestamp_file .. test_case_name .. "|" .. "start" .. "," .. mmGetPowerTimeStamp() .. ",\n"
-			num_frames_rendered = render(PER_CASE_DURATION)
-			timestamp_file = timestamp_file .. test_case_name .. "|" .. "end" .. "," .. mmGetPowerTimeStamp() .. "," .. num_frames_rendered .. "\n"
-			
-			-- Flush sample buffer into powerlog file
-			mmFlushPowerlog()
-			
-			print(num_frames_rendered .. " frames rendered")
-
-		end
-	end
+            end
+        end
+    end
 end
 
 -- Write timestamp file
