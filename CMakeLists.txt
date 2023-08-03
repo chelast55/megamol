@@ -2,7 +2,7 @@
 # Copyright (c) 2020, MegaMol Dev Team
 # All rights reserved.
 #
-cmake_minimum_required(VERSION 3.15...3.26 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.15...3.27 FATAL_ERROR)
 
 # Vcpkg setup
 set(MEGAMOL_VCPKG_VERSION "2023.07.21") # Update default-registry baseline in vcpkg-configuration.json when changing!
@@ -15,10 +15,7 @@ include(cmake/megamol_vcpkg_empty_port.cmake)
 megamol_feature_option(CGAL "Enable CGAL support." OFF)
 megamol_feature_option(CUDA "Enable CUDA support." OFF)
 megamol_feature_option(MPI "Enable MPI support." OFF)
-<<<<<<< HEAD
-=======
-megamol_feature_option(NVPERF "Enable NVPerf support." OFF)
->>>>>>> upstream/master
+megamol_feature_option(NVPERF "Enable NVPerf support." ON)
 megamol_feature_option(OPENGL "Enable OpenGL support." ON)
 megamol_feature_option(OSPRAY "Enable OSPRay support." OFF)
 megamol_feature_option(POWER "Enable power measurement support." OFF)
