@@ -1,6 +1,6 @@
 GENERAL_TEST_CASE_NAME = "glsl_spheres"
 PER_CASE_DURATION = 5 -- seconds
-NVPERF = true -- disable for other manufacturers to save time
+NVPERF = false -- disable for other manufacturers to save time
 
 DATASET_DIRS = {
 	[=[E:/B.Sc.Arbeit/daten/]=]
